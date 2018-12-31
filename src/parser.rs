@@ -1,14 +1,27 @@
 use enums::token::Token;
 use enums::operator::Operator;
+use enums::value::Value;
+use enums::eresult::EResult;
+
+use std::collections::HashMap;
 
 use structs::branch::Branch;
 
 use failure::Error;
 
+#[derive(Eq,PartialEq)]
+enum Mode {
+    First,
+    String,
+    None,
+}
+
 pub struct Parser<'a> {
     raw_code : &'a str,
     cursor_pos : usize,
-    tree : Option<Branch>,
+    tree : Vec<Branch>,
+    mode : Mode,
+    variables : HashMap<String,Value>,
 }
 
 impl<'a> Parser<'a> {
@@ -16,11 +29,13 @@ impl<'a> Parser<'a> {
         Parser {
             raw_code : code,
             cursor_pos : 0,
-            tree : None,
+            tree : Vec::new(),
+            mode : Mode::None,
+            variables : HashMap::new(),
         }
     }
 
-    pub fn next_token(&mut self) -> Token {
+    fn next_token(&mut self) -> Token {
 
         // at the end of the file / code string
         if self.cursor_pos == self.raw_code.len() {
@@ -29,79 +44,107 @@ impl<'a> Parser<'a> {
 
         // gets the slice of the next char
         let char = &self.raw_code[self.cursor_pos .. self.cursor_pos + 1];
-        self.cursor_pos += 1;
+        self.cursor_pos +=1;
+
+        let mut sending_token = self.as_token(char);
+
+        loop {
+            if self.cursor_pos == self.raw_code.len() {
+                return Token::EOF;
+            }
+
+            let char = &self.raw_code[self.cursor_pos .. self.cursor_pos + 1];
+            let next_token = self.as_token(char);
+            if Token::can_combine(&sending_token,&next_token) {
+                sending_token.combine_into(next_token);
+                self.cursor_pos += 1;
+            } else {
+                break;
+            }
+            
+        }
+        
+        self.mode = Mode::None;
+        sending_token
+    }
+
+    fn as_token(&mut self, char : &str) -> Token {
 
         // checks if its an int
         if let Ok(int) = char.parse::<i32>() {
+            self.mode = Mode::None;
             return Token::Int(int);
+        } 
+
+        // checks if its a word
+        if Token::valid_word_char(char,self.mode == Mode::None) {
+            self.mode = Mode::None;
+            return Token::Word(char.to_string());
         }
 
         // checks if its an operator
         match char {
+            " " => Token::WhiteSpace(1),
+            ";" | "\n" => Token::EOL,
             "+" => Token::Operator(Operator::Plus),
             "-" => Token::Operator(Operator::Minus),
+            "=" => Token::Operator(Operator::Equals),
             _ => Token::None,
         }
+        
     }
 
-    pub fn tokenize(&mut self) -> Vec<Token> {
-        let mut tokens : Vec<Token> = Vec::new();
-        let mut tokens_combined : Vec<Token> = Vec::new();
-        
-        loop {
-            let token = self.next_token();
-            if let Token::EOF = token { break; }
-            else { tokens.push(token); }
-        }
-
-
-        tokens.reverse();
-        let mut last_token : Option<Token> = None;
-        loop {
-            match tokens.pop() {
-                None => {
-                    if let Some(last) = last_token {
-                        tokens_combined.push(last);
-                    }
-                    break;
-                },
-                Some(token) => {
-                    if last_token.is_none() {
-                        last_token = Some(token);
-                    } else {
-                        let mut combined = false;
-                        if let Some(ref mut last) = last_token {
-                            if Token::can_combine(last,&token) {
-                                let _result = last.combine_into(token.clone());
-                                combined = true;
-                            } 
-                        }
-                        if !combined {
-                            if let Some(ref last) = last_token {
-                                tokens_combined.push(last.clone());
-                            }
-                            last_token = Some(token);
-                        }
-                    }
+    fn end_of_line(&mut self,current_branch : Branch, assignment_branch : Option<Branch>) {
+        match assignment_branch {
+            Some(mut branch) => {
+                branch.add_child(current_branch);
+                self.tree.push(branch);
+            },
+            None => {
+                match current_branch.is_none() {
+                    true => (),
+                    false => self.tree.push(current_branch)
                 }
             }
         }
-
-        println!("{:?}",tokens_combined);
-
-        tokens_combined
     }
 
-    pub fn build_tree(&mut self) -> Result<(),Error> {
+    fn build_tree(&mut self) -> Result<(),Error> {
         let mut current_branch : Branch = Branch::new(Token::None);
-        for token in self.tokenize() {
+        let mut assignment_branch : Option<Branch> = None;
+
+        loop {
+            let token = self.next_token();
+            // println!("token: {:?}",token);
             match token {
-                Token::EOF => {
+                Token::EOF => break,
+                Token::WhiteSpace(_) => {
                     
+                },
+                Token::Word(word) => {
+                    let branch = Branch::new(Token::Word(word));
+
+                    if !current_branch.is_none() {
+                        current_branch.add_child(branch);
+                    } else {
+                        current_branch = branch;
+                    }
+                },
+                Token::String(string) => {
+                    let branch = Branch::new(Token::String(string));
+
+                    if !current_branch.is_none() {
+                        current_branch.add_child(branch);
+                    } else {
+                        current_branch = branch;
+                    }
                 },
                 Token::EOL => {
-                    
-                },
+                        self.end_of_line(current_branch, assignment_branch);
+                        assignment_branch = None;
+                        current_branch = Branch::new(Token::None);
+
+                }
                 Token::Int(int) => {
                     let branch = Branch::new(Token::Int(int));
 
@@ -112,9 +155,15 @@ impl<'a> Parser<'a> {
                     }
                 },
                 Token::Operator(op) => {
-                    let mut branch = Branch::new(Token::Operator(op));
+                    let mut branch = Branch::new(Token::Operator(op.clone()));
                     branch.add_child(current_branch);
-                    current_branch = branch;
+
+                    if op == Operator::Equals {
+                        assignment_branch = Some(branch);
+                        current_branch = Branch::new(Token::None);
+                    } else {
+                        current_branch = branch;
+                    }
                 },
                 Token::None => {
                     return Err(format_err!("Cannot have a 'Start' token inside a code block."));
@@ -122,17 +171,27 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.tree = Some(current_branch);
+        self.end_of_line(current_branch,assignment_branch);
 
         Ok(())
     }
 
-    pub fn eval(&mut self) -> Result<i32,Error> {
+    pub fn eval(&mut self) -> Result<Value,Error> {
+        self.build_tree()?;
 
-        if let Some(ref tree) = self.tree {
-            Ok(tree.eval()?.clone())
-        } else {
-            Err(format_err!("Tree has not been build."))
+        for ref branch in self.tree.iter() {
+            // println!("==");
+            // branch.pretty(None);
+            match branch.eval()? {
+                EResult::Assignment(variable_name,value) => { self.variables.insert(variable_name, value); }, 
+                _ => (),
+            }
         }
+
+        Ok(Value::Bool(true))
+    }
+
+    pub fn value_of(&'a self, variable_name : &str) -> Option<&'a Value> {
+        self.variables.get(variable_name)
     }
 }

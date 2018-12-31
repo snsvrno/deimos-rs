@@ -1,8 +1,9 @@
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub enum Operator {
     Plus,
     Minus,
+    Equals,
 }
 
 impl Operator {
@@ -10,6 +11,7 @@ impl Operator {
         match self {
             Operator::Plus => "plus",
             Operator::Minus => "minus",
+            Operator::Equals => "equals",
         }
     }
 }

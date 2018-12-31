@@ -1,5 +1,7 @@
 use enums::token::Token;
 use enums::operator::Operator;
+use enums::value::Value;
+use enums::eresult::EResult;
 
 use failure::Error;
 
@@ -8,6 +10,7 @@ pub struct Branch {
     child1 : Option<Box<Branch>>,
     child2 : Option<Box<Branch>>,
     token : Token,
+    variable : Option<String>,
 }
 
 impl Branch {
@@ -17,6 +20,7 @@ impl Branch {
             token : token,
             child1 : None,
             child2 : None,
+            variable : None,
 
         }
     }
@@ -50,34 +54,47 @@ impl Branch {
         None
     }
 
-    pub fn eval(&self) -> Result<i32,Error> {
+    pub fn eval(&self) -> Result<EResult,Error> {
         match self.token {
+            Token::Operator(Operator::Equals) => {
+                match self.child1 {
+                    None => return Err(format_err!("Left of '=' operator cannot be empty")),
+                    Some(ref child) => {
+                        if let Some (ref c2) = self.child2 {
+                            match child.token {
+                                Token::Word(ref word) => {
+                                    return Ok(EResult::Assignment(
+                                        word.clone(),
+                                        c2.eval()?.unwrap_value()?
+                                    ));
+                                },
+                                _ => return Err(format_err!("Left of '=' must be a 'word'"))
+                            }
+                        }
+                    }
+                }
+            },
             Token::Operator(ref op) => {
                 if self.len() != 2 {
                     return Err(format_err!("Cannot evaluate unless there are two children."))
                 }
-                let mut value = 0_i32;
+                match (&self.child1, &self.child2) {
+                    (Some(ref c1), Some(ref c2)) => {
+                        let c1e = c1.eval()?.unwrap_value()?;
+                        let c2e = c2.eval()?.unwrap_value()?;
 
-                if let Some(ref c1) = self.child1 {
-                    value = c1.eval()?;
-                }
-
-                if let Some(ref c2) = self.child2 {
-                    match op {
-                        Operator::Plus => {
-                            value += c2.eval()?;
-                        },
-                        Operator::Minus => {
-                            value -= c2.eval()?
+                        match op {
+                            Operator::Plus => { return Ok(EResult::Value(Value::add(&c1e,&c2e)?)); },
+                            Operator::Minus => { return Ok(EResult::Value(Value::subtract(&c1e,&c2e)?)); },
+                            _ => (),
                         }
-                    }
+                    },
+                    (_,_) => (),
                 }
-
-                return Ok(value);
             },
             
             Token::Int(ref int) => {
-                return Ok(int.clone())
+                return Ok(EResult::Value(Value::Int(int.clone())));
             }
 
             _ => (),
@@ -91,5 +108,18 @@ impl Branch {
             Token::None => true,
             _ => false,
         }
+    }
+
+    pub fn pretty(&self,prefix : Option<String>) {
+        let pre = if let Some(prefix) = prefix { prefix } else { "".to_string() };
+
+        println!("{}Token {:?}",pre,self.token);
+
+        if let Some(ref child) = self.child1 {
+            child.pretty(Some(format!("{}{}",pre,"--")));
+        } 
+        if let Some(ref child) = self.child2 {
+            child.pretty(Some(format!("{}{}",pre,"--")));
+        } 
     }
 }

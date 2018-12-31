@@ -1,13 +1,20 @@
 extern crate lua_interpreter;
 
+use lua_interpreter:: {Parser, Value};
+
 #[test]
-fn basic_parse() {
-    match lua_interpreter::parse("4+3") {
-        Ok(result) => assert_eq!(7,result),
-        Err(error) => { println!("ERROR: {}",error); assert!(false); }
-    }
-    match lua_interpreter::parse("10-7") {
-        Ok(result) => assert_eq!(3,result),
-        Err(error) => { println!("ERROR: {}",error); assert!(false); }
-    }
+fn basic() {
+    let code = r"
+    bob = 10 + 5
+    jim = 30 - 2
+    linda = 1332-2;
+    ";
+
+    let mut parser = Parser::new(&code);
+
+    parser.eval();
+
+    assert_eq!(parser.value_of("bob").unwrap(), &Value::Int(15));
+    assert_eq!(parser.value_of("jim").unwrap(), &Value::Int(28));
+    assert_eq!(parser.value_of("linda").unwrap(), &Value::Int(1330));
 }
