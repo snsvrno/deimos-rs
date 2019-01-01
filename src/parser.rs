@@ -180,9 +180,9 @@ impl<'a> Parser<'a> {
         self.build_tree()?;
 
         for ref branch in self.tree.iter() {
-            // println!("==");
-            // branch.pretty(None);
-            match branch.eval()? {
+            println!("==");
+            branch.pretty(None);
+            match branch.eval(self)? {
                 EResult::Assignment(variable_name,value) => { self.variables.insert(variable_name, value); }, 
                 _ => (),
             }

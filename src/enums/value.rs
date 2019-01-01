@@ -4,6 +4,7 @@ use failure::Error;
 pub enum Value {
     Int(i32),
     Bool(bool),
+    Nil
 }
 
 impl Value {

@@ -3,6 +3,8 @@ use enums::operator::Operator;
 use enums::value::Value;
 use enums::eresult::EResult;
 
+use parser::Parser;
+
 use failure::Error;
 
 #[derive(Debug)]
@@ -54,8 +56,9 @@ impl Branch {
         None
     }
 
-    pub fn eval(&self) -> Result<EResult,Error> {
+    pub fn eval(&self, parser : &Parser) -> Result<EResult,Error> {
         match self.token {
+
             Token::Operator(Operator::Equals) => {
                 match self.child1 {
                     None => return Err(format_err!("Left of '=' operator cannot be empty")),
@@ -65,7 +68,7 @@ impl Branch {
                                 Token::Word(ref word) => {
                                     return Ok(EResult::Assignment(
                                         word.clone(),
-                                        c2.eval()?.unwrap_value()?
+                                        c2.eval(parser)?.unwrap_value()?
                                     ));
                                 },
                                 _ => return Err(format_err!("Left of '=' must be a 'word'"))
@@ -74,14 +77,15 @@ impl Branch {
                     }
                 }
             },
+
             Token::Operator(ref op) => {
                 if self.len() != 2 {
                     return Err(format_err!("Cannot evaluate unless there are two children."))
                 }
                 match (&self.child1, &self.child2) {
                     (Some(ref c1), Some(ref c2)) => {
-                        let c1e = c1.eval()?.unwrap_value()?;
-                        let c2e = c2.eval()?.unwrap_value()?;
+                        let c1e = c1.eval(parser)?.unwrap_value()?;
+                        let c2e = c2.eval(parser)?.unwrap_value()?;
 
                         match op {
                             Operator::Plus => { return Ok(EResult::Value(Value::add(&c1e,&c2e)?)); },
@@ -90,6 +94,13 @@ impl Branch {
                         }
                     },
                     (_,_) => (),
+                }
+            },
+
+            Token::Word(ref word) => {
+                match parser.value_of(&word) {
+                    Some(value) => return Ok(EResult::Value(value.clone())),
+                    None => return Ok(EResult::Value(Value::Nil)),
                 }
             },
             
