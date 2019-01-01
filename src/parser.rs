@@ -6,6 +6,8 @@ use enums::eresult::EResult;
 use std::collections::HashMap;
 
 use structs::branch::Branch;
+use structs::tree::Tree;
+use structs::env::Env;
 
 use failure::Error;
 
@@ -17,21 +19,26 @@ enum Mode {
 }
 
 pub struct Parser<'a> {
+    // stuff used for operation
     raw_code : &'a str,
-    cursor_pos : usize,
-    tree : Vec<Branch>,
-    mode : Mode,
+    tree : Vec<Tree>,
     variables : HashMap<String,Value>,
+    // stuff use for building
+    cursor_pos : usize,
+    code_segment_start : usize,
+    mode : Mode,
 }
 
 impl<'a> Parser<'a> {
     pub fn new(code : &'a str) -> Parser {
         Parser {
             raw_code : code,
-            cursor_pos : 0,
             tree : Vec::new(),
-            mode : Mode::None,
             variables : HashMap::new(),
+
+            cursor_pos : 0,
+            code_segment_start : 0,
+            mode : Mode::None,
         }
     }
 
@@ -95,15 +102,22 @@ impl<'a> Parser<'a> {
     }
 
     fn end_of_line(&mut self,current_branch : Branch, assignment_branch : Option<Branch>) {
+        let mut new_tree = Tree::new();
+        new_tree.set_range(self.code_segment_start,self.cursor_pos);
+
         match assignment_branch {
             Some(mut branch) => {
                 branch.add_child(current_branch);
-                self.tree.push(branch);
+                new_tree.add_branch(branch);
+                self.tree.push(new_tree);
             },
             None => {
                 match current_branch.is_none() {
                     true => (),
-                    false => self.tree.push(current_branch)
+                    false => {
+                        new_tree.add_branch(current_branch);  
+                        self.tree.push(new_tree)
+                    },
                 }
             }
         }
@@ -115,7 +129,7 @@ impl<'a> Parser<'a> {
 
         loop {
             let token = self.next_token();
-            // println!("token: {:?}",token);
+            println!("token: {:?}",token);
             match token {
                 Token::EOF => break,
                 Token::WhiteSpace(_) => {
@@ -179,10 +193,11 @@ impl<'a> Parser<'a> {
     pub fn eval(&mut self) -> Result<Value,Error> {
         self.build_tree()?;
 
-        for ref branch in self.tree.iter() {
-            println!("==");
-            branch.pretty(None);
-            match branch.eval(self)? {
+        for branch in self.tree.iter() {
+            //println!("==");
+            //branch.pretty(None);
+            let mut env = Env::from(&mut self.variables);
+            match branch.eval(&mut env)? {
                 EResult::Assignment(variable_name,value) => { self.variables.insert(variable_name, value); }, 
                 _ => (),
             }

@@ -3,6 +3,8 @@ use enums::operator::Operator;
 use enums::value::Value;
 use enums::eresult::EResult;
 
+use structs::env::Env;
+
 use parser::Parser;
 
 use failure::Error;
@@ -56,7 +58,7 @@ impl Branch {
         None
     }
 
-    pub fn eval(&self, parser : &Parser) -> Result<EResult,Error> {
+    pub fn eval(&self, env : &Env) -> Result<EResult,Error> {
         match self.token {
 
             Token::Operator(Operator::Equals) => {
@@ -68,7 +70,7 @@ impl Branch {
                                 Token::Word(ref word) => {
                                     return Ok(EResult::Assignment(
                                         word.clone(),
-                                        c2.eval(parser)?.unwrap_value()?
+                                        c2.eval(env)?.unwrap_value()?
                                     ));
                                 },
                                 _ => return Err(format_err!("Left of '=' must be a 'word'"))
@@ -84,8 +86,8 @@ impl Branch {
                 }
                 match (&self.child1, &self.child2) {
                     (Some(ref c1), Some(ref c2)) => {
-                        let c1e = c1.eval(parser)?.unwrap_value()?;
-                        let c2e = c2.eval(parser)?.unwrap_value()?;
+                        let c1e = c1.eval(env)?.unwrap_value()?;
+                        let c2e = c2.eval(env)?.unwrap_value()?;
 
                         match op {
                             Operator::Plus => { return Ok(EResult::Value(Value::add(&c1e,&c2e)?)); },
@@ -98,7 +100,7 @@ impl Branch {
             },
 
             Token::Word(ref word) => {
-                match parser.value_of(&word) {
+                match env.value_of(&word) {
                     Some(value) => return Ok(EResult::Value(value.clone())),
                     None => return Ok(EResult::Value(Value::Nil)),
                 }
