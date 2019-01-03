@@ -4,6 +4,8 @@ pub enum Operator {
     Plus,
     Minus,
     Equals(bool), // bool means is_local
+    OpenParenth,
+    CloseParenth,
 }
 
 impl Operator {
@@ -15,6 +17,8 @@ impl Operator {
                 true => "equals, local",
                 false => "equals",
             },
+            Operator::OpenParenth => "open parentheses",
+            Operator::CloseParenth => "close parentheses",
         }
     }
 }

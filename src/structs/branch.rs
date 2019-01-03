@@ -112,7 +112,7 @@ impl Branch {
             _ => (),
         }
 
-        Err(format_err!("Unimplmented"))
+        Err(format_err!("Branch Eval didn't find a match for: {:?}",self.token))
     }
 
     pub fn is_none(&self) -> bool {

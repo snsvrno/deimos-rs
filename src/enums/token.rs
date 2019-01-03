@@ -1,15 +1,19 @@
 use enums::operator::Operator;
 use enums::tokentype::TokenType;
 
+use structs::tree::Tree;
+
 use failure::Error;
 
-#[derive(Debug,Clone)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub enum Token {
     WhiteSpace(usize),
     Int(i32),
     String(String),
     Word(String),
+    Function(String),
     Operator(Operator),
+    Tree(Tree),
     EOF,
     EOL,
     None,
@@ -42,6 +46,14 @@ impl Token {
         Ok(())
     }
 
+    pub fn to_function(mut self) -> Token {
+        if let Token::Word(string) = self {
+            Token::Function(string)
+        } else {
+            self
+        }
+    } 
+
     fn as_int(&mut self) -> Result<i32,Error> {
         match self {
             Token::Int(value) => Ok(*value),
@@ -73,6 +85,8 @@ impl Token {
             Token::None => "None",
             Token::String(_) => "String",
             Token::Word(_) => "Word",
+            Token::Function(_) => "Function",
+            Token::Tree(_) => "Tree",
         }
     }
 

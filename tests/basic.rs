@@ -10,6 +10,7 @@ fn basic() {
     linda = 1332-2;
     do
         local bob = bob + 5
+        assert()
     end
     ";
 

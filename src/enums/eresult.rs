@@ -1,7 +1,7 @@
 use enums::value::Value;
 use failure::Error;
 
-#[derive(Debug)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub enum EResult{
     Value(Value),
     Assignment(String,Value,bool), // bool means is_local

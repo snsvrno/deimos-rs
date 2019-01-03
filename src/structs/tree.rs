@@ -6,7 +6,7 @@ use structs::env::Env;
 use enums::value::Value;
 use enums::eresult::EResult;
 
-#[derive(Debug)]
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct Tree {
     code_start : usize,
     code_end : usize,
@@ -60,6 +60,27 @@ impl Tree {
             EResult::Value(Value::Bool(true)),
             self.env.transfer_upstream_actions()
         ))
+    }
+
+    pub fn pretty(&self, raw_code : Option<&str>) {
+        //! printing function
+        
+        println!("==[TREE]=====");
+        // prints the code block
+        if let Some(ref raw_code) = raw_code {
+            println!("code block:");
+            match self.get_raw_code(raw_code) {
+                Ok(code) => println!("{}",code),
+                Err(error) => println!("ERROR : {}",error),
+            }
+            println!("");
+        }
+
+        println!("branches [{}]:",self.tree.len());
+        for branch in self.tree.iter() {
+            branch.pretty(None);
+        }
+        
     }
     
 }

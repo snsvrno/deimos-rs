@@ -1,6 +1,7 @@
 mod enums; pub use enums::value::Value;
 mod structs;
 mod parser; pub use parser::Parser;
+mod functions;
 
 #[macro_use] extern crate failure;
 use failure::Error;

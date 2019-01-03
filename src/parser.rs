@@ -1,9 +1,8 @@
 use enums::token::Token;
+use enums::tokentype::TokenType;
 use enums::operator::Operator;
 use enums::value::Value;
 use enums::eresult::EResult;
-
-use std::collections::HashMap;
 
 use structs::branch::Branch;
 use structs::tree::Tree;
@@ -11,12 +10,13 @@ use structs::env::Env;
 
 use failure::Error;
 
-#[derive(Eq,PartialEq)]
+#[derive(Eq,PartialEq,Debug)]
 enum Mode {
     First,
     String,
     Local,
     Comment,
+    Parameters,
     None,
 }
 
@@ -37,7 +37,11 @@ impl<'a> Parser<'a> {
         Parser {
             raw_code : code,
             trees : Vec::new(),
-            env : Env::new(),
+            env : { 
+                let mut env = Env::new();
+                env.load_lua_standard_functions();
+                env 
+            },
 
             cursor_pos : 0,
             code_segment_start : 0,
@@ -69,11 +73,27 @@ impl<'a> Parser<'a> {
                 sending_token.combine_into(next_token);
                 self.cursor_pos += 1;
             } else {
-                break;
+                // checks if we are looking at a function
+                if self.mode != Mode::Parameters && sending_token.token_type() == TokenType::Word {
+                    if let Token::Operator(Operator::OpenParenth) = next_token  {
+                        self.cursor_pos += 1;
+                        self.mode = Mode::Parameters;
+                    } else {
+                        break;
+                    }
+                } else if self.mode == Mode::Parameters { 
+                    if let Token::Operator(Operator::CloseParenth) = next_token {
+                        self.mode = Mode::None;
+                        sending_token = sending_token.to_function();
+                        break;
+                    }
+                } else {
+                    break;
+                }
             }
             
         }
-        
+
         self.mode = Mode::None;
         sending_token
     }
@@ -101,6 +121,8 @@ impl<'a> Parser<'a> {
             ";" | "\n" => Token::EOL,
             "+" => Token::Operator(Operator::Plus),
             "-" => Token::Operator(Operator::Minus),
+            "(" => Token::Operator(Operator::OpenParenth),
+            ")" => Token::Operator(Operator::CloseParenth),
             "=" => match self.mode {
                 Mode::Local => {
                     self.mode = Mode::None;
@@ -113,95 +135,73 @@ impl<'a> Parser<'a> {
         
     }
 
-    fn end_of_line(&mut self,current_branch : Branch, assignment_branch : Option<Branch>) {
-        let mut new_tree = Tree::new();
-        new_tree.set_range(self.code_segment_start,self.cursor_pos);
-
-        match assignment_branch {
-            Some(mut branch) => {
-                branch.add_child(current_branch);
-                new_tree.add_branch(branch);
-                self.trees.push(new_tree);
-            },
-            None => {
-                match current_branch.is_none() {
-                    true => (),
-                    false => {
-                        new_tree.add_branch(current_branch);  
-                        self.trees.push(new_tree)
-                    },
-                }
-            }
-        }
-    }
-
     fn build_tree(&mut self) -> Result<(),Error> {
-        let mut current_branch : Branch = Branch::new(Token::None);
+        let mut current_branch : Option<Branch> = None;
         let mut assignment_branch : Option<Branch> = None;
+        let mut current_tree : Tree = Tree::new();
 
         loop {
             let token = self.next_token();
-            // println!("token: {:?}",token);
-            match token {
-                Token::EOF => break,
-                Token::WhiteSpace(_) => {
-                    
-                },
-                Token::Word(word) => {
-                    let branch = Branch::new(Token::Word(word));
+            
+            current_branch = match token {
+                Token::None => return Err(format_err!("Cannot have a 'Start' token inside a code block.")),
+                Token::Tree(_) =>return Err(format_err!("Tree cannot be built!@")),
+                Token::WhiteSpace(_) => current_branch,
 
-                    if !current_branch.is_none() {
-                        current_branch.add_child(branch);
-                    } else {
-                        current_branch = branch;
+                Token::Function(_) |
+                Token::Int(_) |
+                Token::String(_) => Some(Branch::new(token)),
+                
+                Token::Word(ref word) => {
+                    // special words, stuff for the lexicon
+                    match word.as_str() {
+                        "do" => None,
+                        "end" => None,
+                        _ => Some(Branch::new(Token::Word(word.to_string()))),
                     }
                 },
-                Token::String(string) => {
-                    let branch = Branch::new(Token::String(string));
 
-                    if !current_branch.is_none() {
-                        current_branch.add_child(branch);
-                    } else {
-                        current_branch = branch;
-                    }
-                },
-                Token::EOL => {
-                        self.end_of_line(current_branch, assignment_branch);
-                        assignment_branch = None;
-                        current_branch = Branch::new(Token::None);
-
-                }
-                Token::Int(int) => {
-                    let branch = Branch::new(Token::Int(int));
-
-                    if !current_branch.is_none() {
-                        current_branch.add_child(branch);
-                    } else {
-                        current_branch = branch;
-                    }
-                },
-                Token::Operator(op) => {
-                    let mut branch = Branch::new(Token::Operator(op.clone()));
-                    branch.add_child(current_branch);
-
-
-                    match op {
-                        Operator::Equals(_) => {
-                            assignment_branch = Some(branch);
-                            current_branch = Branch::new(Token::None);
-                        },
-                        _ => {
-                            current_branch = branch;
+                Token::EOL | Token::EOF => {
+                    if let Some(mut c_branch) = current_branch {
+                        if let Some(mut branch) =  assignment_branch {
+                            branch.add_child(c_branch);
+                            c_branch = branch;
+                            assignment_branch = None;
                         }
+                        current_tree.add_branch(c_branch);
+                    }
+
+                    if Token::EOF == token {
+                        current_tree.set_range(self.code_segment_start,self.cursor_pos);
+                        self.trees.push(current_tree);
+                        break;
+                    }
+
+                    None
+                }
+                Token::Operator(Operator::Equals(_)) => {
+                    match current_branch {
+                        Some(current_branch) => {
+                            let mut branch = Branch::new(token);
+                            branch.add_child(current_branch);
+                            assignment_branch = Some(branch);
+                            Some(Branch::new(Token::None))
+                        },
+                        None => return Err(format_err!("Cannot assign operator unless there is something to assign.")),
                     }
                 },
-                Token::None => {
-                    return Err(format_err!("Cannot have a 'Start' token inside a code block."));
+                Token::Operator(_) => {
+                    match current_branch {
+                        Some(current_branch) => {
+                            let mut branch = Branch::new(token);
+                            branch.add_child(current_branch);
+                            Some(branch)
+                        },
+                        None => return Err(format_err!("Cannot assign operator unless there is something to assign.")),
+                    }
                 }
-            }
+            };
         }
-
-        self.end_of_line(current_branch,assignment_branch);
 
         Ok(())
     }
@@ -211,8 +211,7 @@ impl<'a> Parser<'a> {
 
         // TODO : should I do the command queue idea?
         for tree in self.trees.iter_mut() {
-            //println!("==");
-            //branch.pretty(None);
+            tree.pretty(Some(self.raw_code));
 
             let (_code_result, action_queue) = tree.eval(&self.env)?;
 

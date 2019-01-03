@@ -3,8 +3,11 @@ use enums::eresult::EResult;
 
 use enums::value::Value;
 
-#[derive(Debug)]
+use functions;
+
+#[derive(Debug,Clone,PartialEq,Eq)]
 pub struct Env {
+    functions : HashMap<String,fn() -> EResult>,
     variables : HashMap<String,Value>,
     upstream_variables : HashMap<String,Value>,
     upstream_actions : Vec<EResult>,
@@ -13,6 +16,7 @@ pub struct Env {
 impl Env {
     pub fn new() -> Env {
         Env {
+            functions : HashMap::new(),
             variables : HashMap::new(),
             upstream_variables : HashMap::new(),
             upstream_actions : Vec::new(),
@@ -59,6 +63,10 @@ impl Env {
         }
     }
 
+    pub fn load_lua_standard_functions(&mut self) {
+
+    }
+
     pub fn set_var_local(&mut self, var_name : String, value : Value) {
         self.variables.insert(var_name,value);
     }
@@ -68,6 +76,15 @@ impl Env {
         match self.variables.get(var_name) {
             Some(ref value) => Some(&value),
             None => self.upstream_variables.get(var_name),
+        }
+    }
+
+    pub fn run_function(&self, func_name : &str) -> Option<EResult> {
+        match self.functions.get(func_name) {
+            None => None,
+            Some(func) => {
+                Some(func())
+            }
         }
     }
 
