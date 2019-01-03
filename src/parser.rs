@@ -193,12 +193,15 @@ impl<'a> Parser<'a> {
     pub fn eval(&mut self) -> Result<Value,Error> {
         self.build_tree()?;
 
-        for branch in self.tree.iter() {
+        // TODO : should I do the command queue idea?
+        for branch in self.tree.iter_mut() {
             //println!("==");
             //branch.pretty(None);
-            let mut env = Env::from(&mut self.variables);
+            let mut env = Env::new();
+            env.add(&mut self.variables);
+            
             match branch.eval(&mut env)? {
-                EResult::Assignment(variable_name,value) => { self.variables.insert(variable_name, value); }, 
+                EResult::Assignment(variable_name,value) => { env.insert(variable_name, value); }, 
                 _ => (),
             }
         }

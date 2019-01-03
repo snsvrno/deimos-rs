@@ -47,17 +47,13 @@ impl Tree {
         for ref branch in self.tree.iter() {
 
             // builds the environment
-            let mut env = Env::make_from(parent_env);
+            let mut env = Env::borrow_from(parent_env);
             env.add(&mut self.variables);
-            
+            // parent_env.add(&mut self.variables);
+             
             match branch.eval(&env)? {
                 EResult::Assignment(var_name,value) => { 
-                    match self.variables.get(&var_name) {
-                        Some(_value) => { self.variables.insert(var_name,value); },
-                        None => {
-                            // TODO : need to send this up the chain somehow ... futures?
-                        }
-                    }
+                    env.insert(var_name,value);
                 }, 
                 _ => (),
             }
