@@ -1,60 +1,81 @@
 use std::collections::HashMap;
+use enums::eresult::EResult;
 
 use enums::value::Value;
 
-pub struct Env<'a> {
-    pub variable_tree : Vec<&'a mut HashMap<String,Value>>,
+#[derive(Debug)]
+pub struct Env {
+    variables : HashMap<String,Value>,
+    upstream_variables : HashMap<String,Value>,
+    upstream_actions : Vec<EResult>,
 }
 
-impl<'a> Env<'a> {
-    pub fn new() -> Env<'a> {
+impl Env {
+    pub fn new() -> Env {
         Env {
-            variable_tree : Vec::new(),
+            variables : HashMap::new(),
+            upstream_variables : HashMap::new(),
+            upstream_actions : Vec::new(),
         }
     }
 
-    pub fn borrow_from(other_env :&'a mut Env) -> Env<'a> {
+    pub fn from_upstream(other_env : &Env) -> Env {
         let mut env = Env::new();
-
-        for var in other_env.variable_tree.iter() {
-            env.add(*var);
-        }
-
+        env.upstream_variables = other_env.variables.clone();
         env
     }
 
-    pub fn add(&mut self, variables : &'a mut HashMap<String,Value>) {
-        self.variable_tree.push(variables);
-    }
+    pub fn set_var(&mut self, var_name : String, value : Value) {
 
-    pub fn value_of(&'a self, var_name : &str) -> Option<&'a Value> {
-        let no_of_v_groups = self.variable_tree.len();
+        // checks if the variable is already assigned locally. if it doesn't
+        // exist that means we are trying to access a variable in a higher scope
+        // so we make an upstream_action to assign the variable once we are finished 
+        // in this scope, but we have to modify the upstream_variables too in case
+        // we use that variable again in this scope.
+        match self.variables.get(&var_name) {
+            Some(_) => { self.variables.insert(var_name,value); },
+            None => {
+                // modify the variable here
+                self.upstream_variables.insert(var_name.clone(),value.clone());
 
-        for i in (0 .. no_of_v_groups).rev() {
-            if let Some(ref value) = self.variable_tree[i].get(var_name) {
-                return Some(value);
-            }
-        }
-
-        None
-    }
-
-    pub fn insert(&mut self, var_name : String, value : Value) {
-        let no_of_v_groups = self.variable_tree.len();
-
-        let mut added = false;
-
-        for i in (0 .. no_of_v_groups).rev() {
-            if let Some(_) = self.variable_tree[i].get(&var_name) {
+                // set a command to change it upstream, though first need to check 
+                // if we already have an assignment command, we can then remove it
+                let mut added = false;
+                for action in self.upstream_actions.iter_mut() {
+                    if let EResult::Assignment(ref e_var, ref mut e_value, _) = action {
+                        if e_var == &var_name {
+                            *e_value = value.clone();
+                            added = true;
+                        }
+                    }
+                }
+                // if it isn't modified then we add it here.
                 if !added {
-                    self.variable_tree[i].insert(var_name.clone(),value.clone());
-                    added = true;
+                    self.upstream_actions.push(EResult::Assignment(
+                        var_name,value,false
+                    ));
                 }
             }
         }
+    }
 
-        if !added {
-            self.variable_tree[no_of_v_groups].insert(var_name.clone(),value.clone());
+    pub fn set_var_local(&mut self, var_name : String, value : Value) {
+        self.variables.insert(var_name,value);
+    }
+
+    pub fn get_value_of<'a>(&'a self, var_name : &str) -> Option<&'a Value> {
+
+        match self.variables.get(var_name) {
+            Some(ref value) => Some(&value),
+            None => self.upstream_variables.get(var_name),
         }
+    }
+
+    pub fn transfer_upstream_actions(&mut self) -> Vec<EResult> {
+        let mut commands = Vec::new();
+        for action in self.upstream_actions.drain(..){
+            commands.push(action);
+        }
+        commands
     }
 }

@@ -15,7 +15,10 @@ fn basic() {
 
     let mut parser = Parser::new(&code);
 
-    parser.eval();
+    if let Err(error) = parser.eval() {
+        println!("ERROR : {}",error);
+        assert!(false);
+    }
 
     assert_eq!(parser.value_of("bob").unwrap(), &Value::Int(15));
     assert_eq!(parser.value_of("jim").unwrap(), &Value::Int(28));

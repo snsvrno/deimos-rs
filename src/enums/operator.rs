@@ -3,7 +3,7 @@
 pub enum Operator {
     Plus,
     Minus,
-    Equals,
+    Equals(bool), // bool means is_local
 }
 
 impl Operator {
@@ -11,7 +11,10 @@ impl Operator {
         match self {
             Operator::Plus => "plus",
             Operator::Minus => "minus",
-            Operator::Equals => "equals",
+            Operator::Equals(is_local) => match is_local {
+                true => "equals, local",
+                false => "equals",
+            },
         }
     }
 }

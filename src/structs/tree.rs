@@ -6,14 +6,12 @@ use structs::env::Env;
 use enums::value::Value;
 use enums::eresult::EResult;
 
-use std::collections::HashMap;
-
 #[derive(Debug)]
 pub struct Tree {
     code_start : usize,
     code_end : usize,
     tree : Vec<Branch>,
-    variables : HashMap<String,Value>,
+    env : Env,
 }
 
 impl Tree {
@@ -22,7 +20,7 @@ impl Tree {
             code_start : 0,
             code_end : 0,
             tree : Vec::new(),
-            variables : HashMap::new(),
+            env : Env::new(),
         }
     }
 
@@ -43,23 +41,25 @@ impl Tree {
         Ok(&entire_code[self.code_start .. self.code_end])
     }
 
-    pub fn eval(&mut self, parent_env : &mut Env) -> Result<EResult,Error> {
-        for ref branch in self.tree.iter() {
-
-            // builds the environment
-            let mut env = Env::borrow_from(parent_env);
-            env.add(&mut self.variables);
-            // parent_env.add(&mut self.variables);
-             
-            match branch.eval(&env)? {
-                EResult::Assignment(var_name,value) => { 
-                    env.insert(var_name,value);
+    pub fn eval(&mut self, parent_env : &Env) -> Result<(EResult,Vec<EResult>),Error> {
+        self.env = Env::from_upstream(parent_env);
+        
+        for ref branch in self.tree.iter() {            
+            match branch.eval(&self.env)? {
+                EResult::Assignment(var_name,value,is_local) => {
+                    match is_local {
+                        true => self.env.set_var_local(var_name,value),
+                        false => self.env.set_var(var_name,value),
+                    }
                 }, 
                 _ => (),
             }
         }
 
-        Ok(EResult::Value(Value::Bool(true)))
+        Ok((
+            EResult::Value(Value::Bool(true)),
+            self.env.transfer_upstream_actions()
+        ))
     }
     
 }

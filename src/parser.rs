@@ -15,14 +15,17 @@ use failure::Error;
 enum Mode {
     First,
     String,
+    Local,
+    Comment,
     None,
 }
 
 pub struct Parser<'a> {
     // stuff used for operation
     raw_code : &'a str,
-    tree : Vec<Tree>,
-    variables : HashMap<String,Value>,
+    trees : Vec<Tree>,
+    env : Env,
+
     // stuff use for building
     cursor_pos : usize,
     code_segment_start : usize,
@@ -33,8 +36,8 @@ impl<'a> Parser<'a> {
     pub fn new(code : &'a str) -> Parser {
         Parser {
             raw_code : code,
-            tree : Vec::new(),
-            variables : HashMap::new(),
+            trees : Vec::new(),
+            env : Env::new(),
 
             cursor_pos : 0,
             code_segment_start : 0,
@@ -77,6 +80,9 @@ impl<'a> Parser<'a> {
 
     fn as_token(&mut self, char : &str) -> Token {
 
+        // checks if we are starting a comment
+
+
         // checks if its an int
         if let Ok(int) = char.parse::<i32>() {
             self.mode = Mode::None;
@@ -95,7 +101,13 @@ impl<'a> Parser<'a> {
             ";" | "\n" => Token::EOL,
             "+" => Token::Operator(Operator::Plus),
             "-" => Token::Operator(Operator::Minus),
-            "=" => Token::Operator(Operator::Equals),
+            "=" => match self.mode {
+                Mode::Local => {
+                    self.mode = Mode::None;
+                    Token::Operator(Operator::Equals(true))
+                },
+                _ => Token::Operator(Operator::Equals(false)),
+            },
             _ => Token::None,
         }
         
@@ -109,14 +121,14 @@ impl<'a> Parser<'a> {
             Some(mut branch) => {
                 branch.add_child(current_branch);
                 new_tree.add_branch(branch);
-                self.tree.push(new_tree);
+                self.trees.push(new_tree);
             },
             None => {
                 match current_branch.is_none() {
                     true => (),
                     false => {
                         new_tree.add_branch(current_branch);  
-                        self.tree.push(new_tree)
+                        self.trees.push(new_tree)
                     },
                 }
             }
@@ -129,7 +141,7 @@ impl<'a> Parser<'a> {
 
         loop {
             let token = self.next_token();
-            println!("token: {:?}",token);
+            // println!("token: {:?}",token);
             match token {
                 Token::EOF => break,
                 Token::WhiteSpace(_) => {
@@ -172,11 +184,15 @@ impl<'a> Parser<'a> {
                     let mut branch = Branch::new(Token::Operator(op.clone()));
                     branch.add_child(current_branch);
 
-                    if op == Operator::Equals {
-                        assignment_branch = Some(branch);
-                        current_branch = Branch::new(Token::None);
-                    } else {
-                        current_branch = branch;
+
+                    match op {
+                        Operator::Equals(_) => {
+                            assignment_branch = Some(branch);
+                            current_branch = Branch::new(Token::None);
+                        },
+                        _ => {
+                            current_branch = branch;
+                        }
                     }
                 },
                 Token::None => {
@@ -194,22 +210,28 @@ impl<'a> Parser<'a> {
         self.build_tree()?;
 
         // TODO : should I do the command queue idea?
-        for branch in self.tree.iter_mut() {
+        for tree in self.trees.iter_mut() {
             //println!("==");
             //branch.pretty(None);
-            let mut env = Env::new();
-            env.add(&mut self.variables);
-            
-            match branch.eval(&mut env)? {
-                EResult::Assignment(variable_name,value) => { env.insert(variable_name, value); }, 
-                _ => (),
+
+            let (_code_result, action_queue) = tree.eval(&self.env)?;
+
+            // process the action queue, doesn't worry about Values, only Assignments
+            for action in action_queue {
+                match action {
+                    // always local at this level, because this is the top most level.
+                    EResult::Assignment(variable_name,value,_) => { self.env.set_var_local(variable_name,value); }, 
+                    _ => (),
+                }
             }
         }
+
+        println!("ev : {:?}",self.env);
 
         Ok(Value::Bool(true))
     }
 
     pub fn value_of(&'a self, variable_name : &str) -> Option<&'a Value> {
-        self.variables.get(variable_name)
+        self.env.get_value_of(variable_name)
     }
 }

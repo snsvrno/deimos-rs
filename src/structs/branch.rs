@@ -5,8 +5,6 @@ use enums::eresult::EResult;
 
 use structs::env::Env;
 
-use parser::Parser;
-
 use failure::Error;
 
 #[derive(Debug)]
@@ -61,7 +59,7 @@ impl Branch {
     pub fn eval(&self, env : &Env) -> Result<EResult,Error> {
         match self.token {
 
-            Token::Operator(Operator::Equals) => {
+            Token::Operator(Operator::Equals(is_local)) => {
                 match self.child1 {
                     None => return Err(format_err!("Left of '=' operator cannot be empty")),
                     Some(ref child) => {
@@ -70,7 +68,8 @@ impl Branch {
                                 Token::Word(ref word) => {
                                     return Ok(EResult::Assignment(
                                         word.clone(),
-                                        c2.eval(env)?.unwrap_value()?
+                                        c2.eval(env)?.unwrap_value()?,
+                                        is_local
                                     ));
                                 },
                                 _ => return Err(format_err!("Left of '=' must be a 'word'"))
@@ -100,7 +99,7 @@ impl Branch {
             },
 
             Token::Word(ref word) => {
-                match env.value_of(&word) {
+                match env.get_value_of(&word) {
                     Some(value) => return Ok(EResult::Value(value.clone())),
                     None => return Ok(EResult::Value(Value::Nil)),
                 }
