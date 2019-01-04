@@ -4,6 +4,8 @@ use codeslice::CodeSlice;
 
 use failure::Error;
 
+/// scanner that converts raw source code into 
+/// tokens
 pub struct Scanner<'a> {
     raw_code : &'a str,
 
@@ -17,6 +19,8 @@ pub struct Scanner<'a> {
 
 impl<'a> Scanner<'a> {
     pub fn new(code : &'a str) -> Scanner<'a> {
+        //! creates a new scanner object from a &str of code
+        
         Scanner {
             raw_code : code,
 
@@ -30,6 +34,18 @@ impl<'a> Scanner<'a> {
     }
 
     pub fn scan(mut self) -> Result<Self,Error> {
+        //! runs the scan, and returns itself. used as a chained
+        //! operator after creating a new scanner so mut isn't needed.
+        //! 
+        //! ```rust
+        //! # extern crate lua_interpreter;
+        //! # use lua_interpreter::scanner::Scanner;
+        //! // prefered to use .scan()? to pass the error onward, or you can use match
+        //! // to capture the error and repeat it.
+        //! let scanner = Scanner::new("some code").scan().expect("scanner failed");
+        //! ```
+        //! 
+        //! Errors from `scan()` will be lexiconical errors from bad lua code.
 
         loop {
             let token = self.next_token()?;
@@ -47,6 +63,9 @@ impl<'a> Scanner<'a> {
 
         Ok(self)
     }
+
+    //////////////////////////////////////////////////////////////////////////////////
+    /// INTERNAL PRIVATE FUNCTIONS /////////////////////////////////////
 
     fn peek(&mut self, chars : &str) -> bool {
         //! looks for the next characters provided in the stream, if found
@@ -70,57 +89,103 @@ impl<'a> Scanner<'a> {
         true
     }
 
-    fn peek_keyword(&mut self, starter : &str) -> Option<TokenType> {        
+    fn peek_keyword(&mut self, starter : &str) -> Option<TokenType> {
+        //! peek variant designed to match against keywords and words
+        //! doesn't edit self unless it finds a match
+         
         let mut working_pos = self.current_pos;
         let mut word : String = starter.to_string();
 
+        if !Token::valid_word_char(starter,true) { return None; }
+
         loop {
-            if working_pos == self.raw_code.len() { return None; }
+            if working_pos == self.raw_code.len() { break; }
 
             let n_char = &self.raw_code[working_pos .. working_pos + 1];
-            working_pos += 1; 
 
-            word = format!("{}{}",word,n_char);
-            
-            if working_pos == self.raw_code.len() || self.peek(" ") {
-                let keyword : Option<TokenType> = match word.as_str() {
-                    "and" => Some(TokenType::And),
-                    "break" => Some(TokenType::Break),
-                    "do" => Some(TokenType::Do),
-                    "else" => Some(TokenType::Else),
-                    "elseif" => Some(TokenType::Elseif),
-                    "end" => Some(TokenType::End),
-                    "false" => Some(TokenType::False),
-                    "for" => Some(TokenType::For),
-                    "function" => Some(TokenType::Function),
-                    "if" => Some(TokenType::If),
-                    "in" => Some(TokenType::In),
-                    "local" => Some(TokenType::Local),
-                    "nil" => Some(TokenType::Nil),
-                    "not" => Some(TokenType::Not),
-                    "or" => Some(TokenType::Or),
-                    "repeat" => Some(TokenType::Repeat),
-                    "return" => Some(TokenType::Return),
-                    "then" => Some(TokenType::Then),
-                    "true" => Some(TokenType::True),
-                    "until" => Some(TokenType::Until),
-                    "while" => Some(TokenType::While),
-                    _ => None,
-                };
-
-                match keyword {
-                    None => return None,
-                    Some(keyword) => {
-                        self.current_pos = working_pos;
-                        return Some(keyword);
-                    }
-                }
-
+            match Token::valid_word_char(n_char,false) {
+                false => break,
+                true => {
+                    // adds the character to the working word
+                    working_pos += 1; 
+                    word = format!("{}{}",word,n_char);
+                },
             }
+        }
+
+        self.current_pos = working_pos;
+
+        let keyword : TokenType = match word.as_str() {
+            "and" => TokenType::And,
+            "break" => TokenType::Break,
+            "do" => TokenType::Do,
+            "else" => TokenType::Else,
+            "elseif" => TokenType::Elseif,
+            "end" => TokenType::End,
+            "false" => TokenType::False,
+            "for" => TokenType::For,
+            "function" => TokenType::Function,
+            "if" => TokenType::If,
+            "in" => TokenType::In,
+            "local" => TokenType::Local,
+            "nil" => TokenType::Nil,
+            "not" => TokenType::Not,
+            "or" => TokenType::Or,
+            "repeat" => TokenType::Repeat,
+            "return" => TokenType::Return,
+            "then" => TokenType::Then,
+            "true" => TokenType::True,
+            "until" => TokenType::Until,
+            "while" => TokenType::While,
+            word => TokenType::Identifier(word.to_string()),
+        };
+
+        Some(keyword)
+    }
+
+    fn peek_number(&mut self, starter : &str) -> Option<TokenType> {
+        //! peek variant designed to match against numbers
+        //! doesn't edit self unless it finds a match
+        
+        let mut working_pos = self.current_pos;
+        let mut number : String = starter.to_string();
+        let mut decimal_count = if starter == "." { 1 } else { 0 };
+
+        if !Token::valid_number_char(&number) { return None; }
+
+        loop {
+            if working_pos == self.raw_code.len() { break; }
+
+            let n_char = &self.raw_code[working_pos .. working_pos + 1];
+            if n_char == "." { decimal_count += 1; }
+
+            match Token::valid_number_char(n_char) {
+                false => break,
+                true => {
+                    // adds the character to the working word
+                    working_pos += 1; 
+                    number = format!("{}{}",number,n_char);
+                },
+            }
+        }
+
+        if decimal_count > 1 { return None; }
+
+        match number.parse::<f32>() {
+            Err(_) => None,
+            Ok(number) =>  {
+                self.current_pos = working_pos;
+                Some(TokenType::Number(number)) 
+            },
         }
     }
 
     fn peek_string(&mut self, starter : &str) -> Result<TokenType,Error> {
+        //! peek variant designed to match against strings
+        //! doesn't edit self unless it finds a match
+        //! 
+        //! will error if cannot find the end of a string literal (no close)
+        
         let mut working_pos = self.current_pos;
         let mut string : String = "".to_string();
 
@@ -143,7 +208,8 @@ impl<'a> Scanner<'a> {
     }
 
     fn next_token(&mut self) -> Result<Token,Error> {
-
+        //! gets the next token in the series, used internally
+        
         // at the end of the file / code string
         if self.current_pos == self.raw_code.len() {
             return Ok(Token::simple(TokenType::EOF));
@@ -178,7 +244,7 @@ impl<'a> Scanner<'a> {
             "~" => if self.peek("=") { TokenType::NotEqual } else { return Err(format_err!("Illegal character '{}' found at {}:{}",char,self.current_line,self.current_pos)) },
             
             "\"" => self.peek_string("\"")?,
-
+            "'" => self.peek_string("'")?,
             
             "\n" => { /* self.peak("\r"); */TokenType::EOL },
             "\r" => { /* self.peak("\n"); */TokenType::EOL },
@@ -186,7 +252,10 @@ impl<'a> Scanner<'a> {
             
             _ => match self.peek_keyword(char) {
                 Some(keyword) => keyword,
-                None => return Err(format_err!("Illegal character '{}' found at {}:{}",char,self.current_line,self.current_pos)),
+                None => match self.peek_number(char) {
+                    Some(number) => number,
+                    None => return Err(format_err!("Illegal character '{}' found at {}:{}",char,self.current_line,self.current_pos)),
+                },
             },
         };
 
@@ -203,7 +272,8 @@ impl<'a> Scanner<'a> {
     }
 }
 
-// TESTING MACROS
+//////////////////////////////////////////////////////////////////////////////////
+// TESTING MACROS ///////////////////////////////
 
 #[macro_export]
 macro_rules! assert_scanner {
@@ -215,7 +285,8 @@ macro_rules! assert_scanner {
                 let length = vec.len();
 
                 if length != scanner.tokens.len() {
-                    panic!("\n\nNumber of Tokens ({}) doesn't match number of Checkers ({}) provided. \n  Tokens : {:?} \n  Checkers : {:?}",
+                    panic!("\n\nCode Segment:\n{}\n\nNumber of Tokens ({}) doesn't match number of Checkers ({}) provided. \n  Tokens : {:?} \n  Checkers : {:?}",
+                        scanner.raw_code,
                         scanner.tokens.len(),
                         length,
                         scanner.tokens,
@@ -225,7 +296,8 @@ macro_rules! assert_scanner {
 
                 for i in 0 .. length {
                     if scanner.tokens[i] != vec[i] {
-                        panic!("\n\nToken #{} doesn't match.\n  Result: {:?}\n  Expected: {:?}",
+                        panic!("\n\nCode Segment:\n{}\n\nToken #{} doesn't match.\n  Result: {:?}\n  Expected: {:?}",
+                            scanner.raw_code,
                             i,
                             scanner.tokens[i].get_type(),
                             vec[i]
@@ -237,16 +309,17 @@ macro_rules! assert_scanner {
     };
 }
 
-mod test {
+mod tests {
 
     #[test]
-    pub fn token_test() {
+    pub fn basic_token_matching() {
         //! tests the token scanning, making sure if we pass a string of the 
         //! exact token it will correctly identify which token we want.
         
         use scanner::Scanner;
         use tokentype::TokenType;
 
+        //////////////////////////////////////////////////////////////
         // +     -     *     /     %     ^     #
         assert_scanner!(Scanner::new("+"),TokenType::Plus);
         assert_scanner!(Scanner::new("-"),TokenType::Minus);
@@ -277,11 +350,8 @@ mod test {
         assert_scanner!(Scanner::new("."),TokenType::Period);
         assert_scanner!(Scanner::new(".."),TokenType::DoublePeriod);
         assert_scanner!(Scanner::new("..."),TokenType::TriplePeriod);
-
-        // a string
-        assert_scanner!(Scanner::new("\"ashortstring\""),TokenType::String("".to_string()));
-        assert_scanner!(Scanner::new("\"a longer string\""),TokenType::String("".to_string()));
-        
+ 
+        //////////////////////////////////////////////////////////////       
         // and       break     do        else      elseif
         assert_scanner!(Scanner::new("and"),TokenType::And);
         assert_scanner!(Scanner::new("break"),TokenType::Break);
@@ -307,6 +377,28 @@ mod test {
         assert_scanner!(Scanner::new("true"),TokenType::True);
         assert_scanner!(Scanner::new("until"),TokenType::Until);
         assert_scanner!(Scanner::new("while"),TokenType::While);
+
+        //////////////////////////////////////////////////////////////
+        // strings
+        assert_scanner!(Scanner::new("\"ashortstring\""),TokenType::String("".to_string()));
+        assert_scanner!(Scanner::new("\"a longer string\""),TokenType::String("".to_string()));
+
+        //////////////////////////////////////////////////////////////
+        // numbers
+        assert_scanner!(Scanner::new("123"),TokenType::Number(123 as f32));
+        assert_scanner!(Scanner::new("0.123"),TokenType::Number(0.123));
+        assert_scanner!(Scanner::new(".123"),TokenType::Period,TokenType::Number(123 as f32));
+        assert_scanner!(Scanner::new("1.23"),TokenType::Number(1.23));
+        assert_scanner!(Scanner::new("123."),TokenType::Number(123 as f32));
+
+        //////////////////////////////////////////////////////////////
+        // variable names (assignment)
+        assert_scanner!(Scanner::new("local bob = 23"),
+            TokenType::Local,
+            TokenType::Identifier("bob".to_string()),
+            TokenType::Equal,
+            TokenType::Number(23 as f32)
+        );
     }
 
 }

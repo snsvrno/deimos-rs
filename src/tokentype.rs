@@ -1,4 +1,4 @@
-#[derive(Debug,PartialEq,Eq)]
+#[derive(Debug,PartialEq)]
 pub enum TokenType {
     /// Tokens taken from the Lua [5.1 manual](https://www.lua.org/manual/5.1/manual.html#2.1)
 
@@ -58,9 +58,9 @@ pub enum TokenType {
     While,
 
     // literals
-    Identifier,
+    Identifier(String),
     String(String),
-    //Number(f32),
+    Number(f32),
 
     WhiteSpace,
     EOL,
