@@ -201,88 +201,112 @@ impl<'a> Scanner<'a> {
 
         Ok(sending_token)
     }
+}
 
-    pub fn assert(&self,token : TokenType) -> bool {
-        //! used for testing, to check that only 1 single token was matched, 
-        //! and it is the correct token
-        
-        if self.tokens[0] == token && self.tokens.len() == 1{
-            true
-        } else {
-            println!("token[0] = {:?}, tokens.len() = {}, expecting {:?}",self.tokens[0].get_type(), self.tokens.len(), token);
-            false
+// TESTING MACROS
+
+#[macro_export]
+macro_rules! assert_scanner {
+    ($scanner:expr,$($checker:expr),*) => {
+        match $scanner.scan() {
+            Err(error) => panic!("\n{}",error),
+            Ok(scanner) => {
+                let vec = vec![$($checker),*];
+                let length = vec.len();
+
+                if length != scanner.tokens.len() {
+                    panic!("\n\nNumber of Tokens ({}) doesn't match number of Checkers ({}) provided. \n  Tokens : {:?} \n  Checkers : {:?}",
+                        scanner.tokens.len(),
+                        length,
+                        scanner.tokens,
+                        vec
+                    );
+                }
+
+                for i in 0 .. length {
+                    if scanner.tokens[i] != vec[i] {
+                        panic!("\n\nToken #{} doesn't match.\n  Result: {:?}\n  Expected: {:?}",
+                            i,
+                            scanner.tokens[i].get_type(),
+                            vec[i]
+                        );
+                    }
+                }
+            }
         }
-    }
-
+    };
 }
 
 mod test {
 
     #[test]
     pub fn token_test() {
+        //! tests the token scanning, making sure if we pass a string of the 
+        //! exact token it will correctly identify which token we want.
+        
         use scanner::Scanner;
         use tokentype::TokenType;
 
         // +     -     *     /     %     ^     #
-        assert!(Scanner::new("+").scan().expect("error").assert(TokenType::Plus));
-        assert!(Scanner::new("-").scan().expect("error").assert(TokenType::Minus));
-        assert!(Scanner::new("*").scan().expect("error").assert(TokenType::Star));
-        assert!(Scanner::new("/").scan().expect("error").assert(TokenType::Slash));
-        assert!(Scanner::new("%").scan().expect("error").assert(TokenType::Percent));
-        assert!(Scanner::new("^").scan().expect("error").assert(TokenType::Carrot));
-        assert!(Scanner::new("#").scan().expect("error").assert(TokenType::Pound));
+        assert_scanner!(Scanner::new("+"),TokenType::Plus);
+        assert_scanner!(Scanner::new("-"),TokenType::Minus);
+        assert_scanner!(Scanner::new("*"),TokenType::Star);
+        assert_scanner!(Scanner::new("/"),TokenType::Slash);
+        assert_scanner!(Scanner::new("%"),TokenType::Percent);
+        assert_scanner!(Scanner::new("^"),TokenType::Carrot);
+        assert_scanner!(Scanner::new("#"),TokenType::Pound);
         // ==    ~=    <=    >=    <     >     =
-        assert!(Scanner::new("==").scan().expect("error").assert(TokenType::EqualEqual));
-        assert!(Scanner::new("~=").scan().expect("error").assert(TokenType::NotEqual));
-        assert!(Scanner::new("<=").scan().expect("error").assert(TokenType::LessEqual));
-        assert!(Scanner::new(">=").scan().expect("error").assert(TokenType::GreaterEqual));
-        assert!(Scanner::new("<").scan().expect("error").assert(TokenType::LessThan));
-        assert!(Scanner::new(">").scan().expect("error").assert(TokenType::GreaterThan));
-        assert!(Scanner::new("=").scan().expect("error").assert(TokenType::Equal));
+        assert_scanner!(Scanner::new("=="),TokenType::EqualEqual);
+        assert_scanner!(Scanner::new("~="),TokenType::NotEqual);
+        assert_scanner!(Scanner::new("<="),TokenType::LessEqual);
+        assert_scanner!(Scanner::new(">="),TokenType::GreaterEqual);
+        assert_scanner!(Scanner::new("<"),TokenType::LessThan);
+        assert_scanner!(Scanner::new(">"),TokenType::GreaterThan);
+        assert_scanner!(Scanner::new("="),TokenType::Equal);
         // (     )     {     }     [     ]
-        assert!(Scanner::new("(").scan().expect("error").assert(TokenType::LeftParen));
-        assert!(Scanner::new(")").scan().expect("error").assert(TokenType::RightParen));
-        assert!(Scanner::new("{").scan().expect("error").assert(TokenType::LeftMoustache));
-        assert!(Scanner::new("}").scan().expect("error").assert(TokenType::RightMoustache));
-        assert!(Scanner::new("[").scan().expect("error").assert(TokenType::LeftBracket));
-        assert!(Scanner::new("]").scan().expect("error").assert(TokenType::RightBracket));
+        assert_scanner!(Scanner::new("("),TokenType::LeftParen);
+        assert_scanner!(Scanner::new(")"),TokenType::RightParen);
+        assert_scanner!(Scanner::new("{"),TokenType::LeftMoustache);
+        assert_scanner!(Scanner::new("}"),TokenType::RightMoustache);
+        assert_scanner!(Scanner::new("["),TokenType::LeftBracket);
+        assert_scanner!(Scanner::new("]"),TokenType::RightBracket);
         // ;     :     ,     .     ..    ...
-        assert!(Scanner::new(";").scan().expect("error").assert(TokenType::SemiColon));
-        assert!(Scanner::new(":").scan().expect("error").assert(TokenType::Colon));
-        assert!(Scanner::new(",").scan().expect("error").assert(TokenType::Comma));
-        assert!(Scanner::new(".").scan().expect("error").assert(TokenType::Period));
-        assert!(Scanner::new("..").scan().expect("error").assert(TokenType::DoublePeriod));
-        assert!(Scanner::new("...").scan().expect("error").assert(TokenType::TriplePeriod));
+        assert_scanner!(Scanner::new(";"),TokenType::SemiColon);
+        assert_scanner!(Scanner::new(":"),TokenType::Colon);
+        assert_scanner!(Scanner::new(","),TokenType::Comma);
+        assert_scanner!(Scanner::new("."),TokenType::Period);
+        assert_scanner!(Scanner::new(".."),TokenType::DoublePeriod);
+        assert_scanner!(Scanner::new("..."),TokenType::TriplePeriod);
 
         // a string
-        assert!(Scanner::new("\"ashortstring\"").scan().expect("error").assert(TokenType::String("".to_string())));
-        assert!(Scanner::new("\"a longer string\"").scan().expect("error").assert(TokenType::String("".to_string())));
+        assert_scanner!(Scanner::new("\"ashortstring\""),TokenType::String("".to_string()));
+        assert_scanner!(Scanner::new("\"a longer string\""),TokenType::String("".to_string()));
         
         // and       break     do        else      elseif
-        assert!(Scanner::new("and").scan().expect("error").assert(TokenType::And));
-        assert!(Scanner::new("break").scan().expect("error").assert(TokenType::Break));
-        assert!(Scanner::new("do").scan().expect("error").assert(TokenType::Do));
-        assert!(Scanner::new("else").scan().expect("error").assert(TokenType::Else));
-        assert!(Scanner::new("elseif").scan().expect("error").assert(TokenType::Elseif));
+        assert_scanner!(Scanner::new("and"),TokenType::And);
+        assert_scanner!(Scanner::new("break"),TokenType::Break);
+        assert_scanner!(Scanner::new("do"),TokenType::Do);
+        assert_scanner!(Scanner::new("else"),TokenType::Else);
+        assert_scanner!(Scanner::new("elseif"),TokenType::Elseif);
         // end       false     for       function  if
-        assert!(Scanner::new("end").scan().expect("error").assert(TokenType::End));
-        assert!(Scanner::new("false").scan().expect("error").assert(TokenType::False));
-        assert!(Scanner::new("for").scan().expect("error").assert(TokenType::For));
-        assert!(Scanner::new("function").scan().expect("error").assert(TokenType::Function));
-        assert!(Scanner::new("if").scan().expect("error").assert(TokenType::If));
+        assert_scanner!(Scanner::new("end"),TokenType::End);
+        assert_scanner!(Scanner::new("false"),TokenType::False);
+        assert_scanner!(Scanner::new("for"),TokenType::For);
+        assert_scanner!(Scanner::new("function"),TokenType::Function);
+        assert_scanner!(Scanner::new("if"),TokenType::If);
         // in        local     nil       not       or
-        assert!(Scanner::new("in").scan().expect("error").assert(TokenType::In));
-        assert!(Scanner::new("local").scan().expect("error").assert(TokenType::Local));
-        assert!(Scanner::new("nil").scan().expect("error").assert(TokenType::Nil));
-        assert!(Scanner::new("not").scan().expect("error").assert(TokenType::Not));
-        assert!(Scanner::new("or").scan().expect("error").assert(TokenType::Or));
+        assert_scanner!(Scanner::new("in"),TokenType::In);
+        assert_scanner!(Scanner::new("local"),TokenType::Local);
+        assert_scanner!(Scanner::new("nil"),TokenType::Nil);
+        assert_scanner!(Scanner::new("not"),TokenType::Not);
+        assert_scanner!(Scanner::new("or"),TokenType::Or);
         // repeat    return    then      true      until     while
-        assert!(Scanner::new("repeat").scan().expect("error").assert(TokenType::Repeat));
-        assert!(Scanner::new("return").scan().expect("error").assert(TokenType::Return));
-        assert!(Scanner::new("then").scan().expect("error").assert(TokenType::Then));
-        assert!(Scanner::new("true").scan().expect("error").assert(TokenType::True));
-        assert!(Scanner::new("until").scan().expect("error").assert(TokenType::Until));
-        assert!(Scanner::new("while").scan().expect("error").assert(TokenType::While));
+        assert_scanner!(Scanner::new("repeat"),TokenType::Repeat);
+        assert_scanner!(Scanner::new("return"),TokenType::Return);
+        assert_scanner!(Scanner::new("then"),TokenType::Then);
+        assert_scanner!(Scanner::new("true"),TokenType::True);
+        assert_scanner!(Scanner::new("until"),TokenType::Until);
+        assert_scanner!(Scanner::new("while"),TokenType::While);
     }
 
 }
