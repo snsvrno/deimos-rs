@@ -1,12 +1,16 @@
-mod enums; pub use enums::value::Value;
-mod structs;
-mod parser; pub use parser::Parser;
-mod functions;
-
 #[macro_use] extern crate failure;
 use failure::Error;
 
-pub fn parse(code : &str) -> Result<Value,Error> {
-    let mut parser = Parser::new(code);
-    parser.eval()
+mod token;
+mod tokentype;
+mod codeslice;
+mod scanner; use scanner::Scanner;
+
+pub fn parse(code : &str) {
+    match Scanner::new(code).scan() {
+        Err(error) => { println!("ERROR : {}",error); assert!(false); },
+        Ok(scanner) => {
+
+        }
+    }
 }
