@@ -1,4 +1,4 @@
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct CodeSlice {
     // for getting the substring
     pos_start : usize,

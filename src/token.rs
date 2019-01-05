@@ -1,7 +1,7 @@
 use tokentype::TokenType;
 use codeslice::CodeSlice;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Token {
     token_type : TokenType,
     
@@ -84,6 +84,16 @@ impl PartialEq<TokenType> for Token {
             (TokenType::String(_), TokenType::String(_)) => true,
             // (TokenType::Number(_), TokenType::Number(_)) => true,
             (_, _) => self.get_type() == other 
+        }
+    }
+}
+
+impl PartialEq for Token {
+    fn eq(&self, other: &Token) -> bool {
+        match (&self.token_type,&other.token_type) {
+            (TokenType::String(_), TokenType::String(_)) => true,
+            // (TokenType::Number(_), TokenType::Number(_)) => true,
+            (_, _) => self.get_type() == other.get_type() 
         }
     }
 }

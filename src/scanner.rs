@@ -37,7 +37,7 @@ impl<'a> Scanner<'a> {
         //! runs the scan, and returns itself. used as a chained
         //! operator after creating a new scanner so mut isn't needed.
         //! 
-        //! ```rust
+        //! ```rust,ignore
         //! # extern crate lua_interpreter;
         //! # use lua_interpreter::scanner::Scanner;
         //! // prefered to use .scan()? to pass the error onward, or you can use match
@@ -62,6 +62,10 @@ impl<'a> Scanner<'a> {
         }
 
         Ok(self)
+    }
+    
+    pub fn explode(mut self) -> (&'a str, Vec<Token>) {
+        (self.raw_code,self.tokens)
     }
 
     //////////////////////////////////////////////////////////////////////////////////
