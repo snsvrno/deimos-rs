@@ -29,6 +29,12 @@ impl Unary {
 
 }
 
+impl std::fmt::Display for Unary {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"({} {})",self.modifier,self.expr)
+    }
+}
+
 mod tests {
 
     #[test]
@@ -43,7 +49,7 @@ mod tests {
             Gram::Token(Token::simple(TokenType::Identifier("depth".to_string()))),
             Gram::Token(Token::simple(TokenType::Equal)),
             Gram::Token(Token::simple(TokenType::Minus)),
-            Gram::Token(Token::simple(TokenType::Number(0.1234))).to_literal().to_expr(),
+            Gram::Token(Token::simple(TokenType::Number(0.1234))).to_literal().unwrap().to_expr().unwrap(),
         ];
 
         assert!(Unary::create_from(&token_stream[0], &token_stream[1]).is_none());

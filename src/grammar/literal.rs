@@ -22,6 +22,12 @@ impl Literal {
     }
 }
 
+impl std::fmt::Display for Literal {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"{}",self.token)
+    }
+}
+
 mod tests {
 
     #[test]

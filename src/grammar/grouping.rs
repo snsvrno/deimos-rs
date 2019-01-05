@@ -25,6 +25,12 @@ impl Grouping {
 
 }
 
+impl std::fmt::Display for Grouping {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"({})",self.expr)
+    }
+}
+
 mod tests {
 
     #[test]

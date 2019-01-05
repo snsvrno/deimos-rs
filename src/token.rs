@@ -78,6 +78,12 @@ impl Token {
     }
 }
 
+impl std::fmt::Display for Token {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"{}",self.token_type)
+    }
+}
+
 impl PartialEq<TokenType> for Token {
     fn eq(&self, other: &TokenType) -> bool {
         match (&self.token_type,other) {
