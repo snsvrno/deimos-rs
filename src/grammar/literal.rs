@@ -16,6 +16,7 @@ impl Literal {
             TokenType::False |
             TokenType::Nil |
             TokenType::Number(_) |
+            TokenType::Identifier(_) | 
             TokenType::String(_) => Some(Gram::Literal(Box::new(Literal{ token }))),
             _ => None,
         }

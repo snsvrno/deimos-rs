@@ -26,15 +26,17 @@ impl Binary {
     ];
     const ORDER_TIER_7 : [TokenType; 1] = [ TokenType::And ];
     const ORDER_TIER_8 : [TokenType; 1] = [ TokenType::Or ];
+    const ORDER_TIER_9 : [TokenType; 1] = [ TokenType::Equal ];
 
-    const OPERATION_ORDER : [ &'static [TokenType]; 7] = [
+    const OPERATION_ORDER : [ &'static [TokenType]; 8] = [
         &Binary::ORDER_TIER_1,
         &Binary::ORDER_TIER_3,
         &Binary::ORDER_TIER_4,
         &Binary::ORDER_TIER_5,
         &Binary::ORDER_TIER_6,
         &Binary::ORDER_TIER_7,
-        &Binary::ORDER_TIER_8
+        &Binary::ORDER_TIER_8,
+        &Binary::ORDER_TIER_9
     ];
     
     pub fn create_from(left_token : &Gram, operator: &Gram, right_token : &Gram) -> Option<Gram> {
@@ -54,7 +56,8 @@ impl Binary {
                     TokenType::NotEqual |
                     TokenType::EqualEqual |
                     TokenType::And |
-                    TokenType::Or => Some(Gram::Binary(Box::new(Binary{
+                    TokenType::Or |
+                    TokenType::Equal => Some(Gram::Binary(Box::new(Binary{
                         left_expr : *left_expr.clone(),
                         operator : token.clone(),
                         right_expr : *right_expr.clone(),
@@ -66,24 +69,18 @@ impl Binary {
         }
     }
 
-    pub fn process_set(grams : &mut Vec<Gram>) -> Result<(),Error> {
+    pub fn process_set_increment(grams : &mut Vec<Gram>, tier : usize) -> Result<Option<usize>,Error> {
 
         // needs at least Grams in order to match a binary, since the binary 
         // is 3 Expr (op) Expr, else it will just return.
-        if grams.len() < 3 { return Ok(()); }
+        if grams.len() < 3 { return Ok(None); }
 
         // goes through the order of operations, for all operations
-        let mut tier : Option<usize> = Some(0);
-        loop {
+        // let mut tier : Option<usize> = Some(0);
             
-            let ops = match tier {
-                Some(t) => {
-                    match Binary::OPERATION_ORDER.len() > t {
-                        true => Binary::OPERATION_ORDER[t],
-                        false => break,
-                    }
-                },
-                None => return Err(format_err!("Tier is None!! Shouldn't have happened.")),
+            let ops = match Binary::OPERATION_ORDER.len() > tier {
+                true => Binary::OPERATION_ORDER[tier],
+                false => { return Ok(None); },
             };
 
             // decided to put a loop in here so once we get a match we will start 
@@ -94,109 +91,96 @@ impl Binary {
             // be correct.
             loop {
 
-                // used to go through this loop again if we found a match.
-                // the usize is the position of the matching set of Grams
-                let mut reset_loop : Option<usize> = None;
+            // used to go through this loop again if we found a match.
+            // the usize is the position of the matching set of Grams
+            let mut reset_loop : Option<usize> = None;
 
-                // get a group of 3 grams and check it against all of the operators in the group
-                for i in 0 .. (grams.len()-2) {
-                    // first we check if it matches the general patter for a binary,
-                    // if the 1st and 3rd grams aren't expressions we move on to the next
-                    // group of grams
-                    if !grams[i].is_expression() || !grams[i+2].is_expression() { continue; }
-                    
-                    // goes through each operator
-                    for op in ops.iter() {
-                        if let Gram::Token(ref token) = grams[i+1] {
-                            if token.get_type() == op {
-                                // found a match!
+            // get a group of 3 grams and check it against all of the operators in the group
+            for i in 0 .. (grams.len()-2) {
+                // first we check if it matches the general patter for a binary,
+                // if the 1st and 3rd grams aren't expressions we move on to the next
+                // group of grams
+                if !grams[i].is_expression() || !grams[i+2].is_expression() { continue; }
+                
+                // goes through each operator
+                for op in ops.iter() {
+                    if let Gram::Token(ref token) = grams[i+1] {
+                        if token.get_type() == op {
+                            // found a match!
 
-                                // resetting the loop
-                                reset_loop = Some(i);
-                                break;
-                            }
+                            // resetting the loop
+                            reset_loop = Some(i);
+                            break;
                         }
                     }
-
-                    // continuing to break the loop from a positive operator match
-                    if reset_loop.is_some() { break; }
                 }
 
-                // modifying the gram vec if we found a match in the above loop
-                if let Some(i) = reset_loop {
+                // continuing to break the loop from a positive operator match
+                if reset_loop.is_some() { break; }
+            }
 
-                    // removing the 3 Grams and putting them in a format that can be used.
-                    let mut removed_tokens : Vec<Gram> = grams.drain(i .. i + 3).collect();
+            // modifying the gram vec if we found a match in the above loop
+            if let Some(i) = reset_loop {
 
-                    let right : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                        return Err(format_err!("Failed to build Binary, tried to remove 1/3 Grams but failed.")); };
-                    let middle : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                        return Err(format_err!("Failed to build Binary, tried to remove 2/3 Grams but failed.")); };
-                    let left : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                        return Err(format_err!("Failed to build Binary, tried to remove 3/3 Grams but failed.")); };
+                // removing the 3 Grams and putting them in a format that can be used.
+                let mut removed_tokens : Vec<Gram> = grams.drain(i .. i + 3).collect();
 
-                    // creates the new gram, needs to unwrap the pieces, they will error
-                    // if somehow we got mismatched types, but this shouldn't happen
-                    // because we previously check these when we were checking the operator.
-                    let new_gram = Gram::Binary(Box::new(Binary{
-                        left_expr : left.unwrap_expr()?,
-                        operator : middle.unwrap_token()?,
-                        right_expr : right.unwrap_expr()?,
-                    }));
+                let right : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
+                    return Err(format_err!("Failed to build Binary, tried to remove 1/3 Grams but failed.")); };
+                let middle : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
+                    return Err(format_err!("Failed to build Binary, tried to remove 2/3 Grams but failed.")); };
+                let left : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
+                    return Err(format_err!("Failed to build Binary, tried to remove 3/3 Grams but failed.")); };
 
-                    match Expression::create_into_gram(new_gram) {
-                        None => return Err(format_err!("You shouldn't ever see this error!")), 
-                        Some(expr_gram) => { grams.insert(i,expr_gram); }
-                    }
+                // creates the new gram, needs to unwrap the pieces, they will error
+                // if somehow we got mismatched types, but this shouldn't happen
+                // because we previously check these when we were checking the operator.
+                let new_gram = Gram::Binary(Box::new(Binary{
+                    left_expr : left.unwrap_expr()?,
+                    operator : middle.unwrap_token()?,
+                    right_expr : right.unwrap_expr()?,
+                }));
 
-                    // need to check if we have enough Grams to actually continue, if we get less than 3 there is 
-                    // no way to match anything anymore so we should finish.
-                    if grams.len() < 3 { return Ok(()); }
+                match Expression::create_into_gram(new_gram) {
+                    None => return Err(format_err!("You shouldn't ever see this error!")), 
+                    Some(expr_gram) => { grams.insert(i,expr_gram); }
+                }
 
-                    // counts as a reset for the tier, we need to do this because we just matched an operation,
-                    // maybe there was another operation further up the stack that we didn't match because it
-                    // couldn't have matched, and we would now miss it.
-                    // example : 
-                    // tier = None;
+                // need to check if we have enough Grams to actually continue, if we get less than 3 there is 
+                // no way to match anything anymore so we should finish.
+                if grams.len() < 3 { return Ok(None); }
 
-                } else {
+                // counts as a reset for the tier, we need to do this because we just matched an operation,
+                // maybe there was another operation further up the stack that we didn't match because it
+                // couldn't have matched, and we would now miss it.
+                // example : 
+                // tier = None;
 
-                    // should be that we looked at all of the tokens and didn't find what we 
-                    // were looking for, so lets move on. 
-                    //
-                    // we will only be here (and always be here) when the inner loop doesn't foind a match, meaning
-                    // the reset_loop var will be none, and we will be in this part. This means we went through the
-                    // inner loop completely and didn't find anything, so we should break and go to the next operator
-                    // set (tier)
-                    break;
+            } else {
+                break;
+            }
+        }
+        // increment the operator tier.
+        match Binary::OPERATION_ORDER.len() > tier  +1 {
+            true => Ok(Some(tier + 1)),
+            false => Ok(None),
+        }
+    }
+
+    pub fn process_set(grams : &mut Vec<Gram>) -> Result<(),Error> {
+        let mut tier = 0;
+        
+        loop {
+            match Binary::process_set_increment(grams,tier)? {
+                None => break,
+                Some(t) => {
+                    tier = t;
                 }
             }
-            // increment the operator tier.
-            tier = match tier {
-                None => Some(0),
-                Some(t) => Some(t+1),
-            };
         }
 
         Ok(())
     }
-
-/*
-    fn collect_in_tier(tier : usize) -> Vec<&'static TokenType> {
-        //! returns a list of operators in the desired tier,
-        //! 
-        //! use for order of operations.
-
-        let mut tiers : Vec<&TokenType> = Vec::new();
-
-        for (token,t) in Binary::operation_order.iter() {
-            if t == &tier {
-                tiers.push(&token);
-            }
-        }
-
-        tiers
-    }*/
 
 }
 

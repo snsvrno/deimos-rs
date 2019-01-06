@@ -6,6 +6,7 @@ use grammar::gram::Gram;
 use tokentype::TokenType;
 
 use grammar::binary::Binary;
+use grammar::unary::Unary;
 
 pub struct Tree<'a> {
     raw_code : &'a str,
@@ -56,8 +57,23 @@ impl<'a> Tree<'a> {
     }
 
     pub fn create_tree(mut self) -> Result<Self,Error> {
+
         for mut line in self.tokens.iter_mut() {
-            Binary::process_set(&mut line)?;
+            let mut tier = 0;
+            loop {
+                if tier == 3 {
+                    // '-' and 'Not' should be done after checking for '-' and '+' binaries, 
+                    // and then '-', '+', '*', and '/' should be done again. 
+                    Unary::process_set(&mut line)?;
+                    Binary::process_set_increment(&mut line,1)?;
+                    Binary::process_set_increment(&mut line,2)?;
+                }
+                let new_tier = Binary::process_set_increment(&mut line,tier)?;
+                match new_tier {
+                    None => break,
+                    Some(t) => tier = t,
+                }
+            }
         }
 
         for line in self.tokens.iter() {
@@ -68,5 +84,28 @@ impl<'a> Tree<'a> {
         }
 
         Ok(self)
+    }
+}
+
+
+mod tests {
+    #[test]
+    fn simple_code() {
+        use scanner::Scanner;
+        use tree::Tree;
+
+        let scanner = Scanner::new("bob = 5 + 2 * 3").scan().unwrap();
+        let tree = Tree::from_scanner(scanner).unwrap().create_tree().unwrap();
+
+        assert_eq!(tree.tokens.len(),1);
+        assert_eq!(tree.tokens[0].len(),1);
+
+        let scanner = Scanner::new("bob = 5 + -2").scan().unwrap();
+        let tree = Tree::from_scanner(scanner).unwrap().create_tree().unwrap();
+
+        assert_eq!(tree.tokens.len(),1);
+        assert_eq!(tree.tokens[0].len(),1);
+
+        assert!(false);
     }
 }

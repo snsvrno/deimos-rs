@@ -3,6 +3,7 @@ extern crate lua_interpreter;
 mod helpers;
 
 #[test]
+#[ignore]
 fn basic() {
     let code = helpers::load_file("basic");
 
