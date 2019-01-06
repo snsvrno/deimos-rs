@@ -18,6 +18,16 @@ pub enum Gram {
 }
 
 impl Gram {
+    pub fn create(token : Token) -> Gram {
+        match Literal::create_from(token.clone()) {
+            Some(lit) => match Expression::create_into_gram(lit) {
+                Some(expr) => expr,
+                None => panic!("can't happen"),
+            },
+            None => Gram::Token(token),
+        }
+    }
+
     pub fn to_literal(mut self) -> Result<Gram,Error> {
 
         if let Gram::Token(token) = self {
@@ -95,12 +105,12 @@ impl Gram {
 impl std::fmt::Display for Gram {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Gram::Literal(lit) => write!(f, "Literal({})",lit),
-            Gram::Unary(unary) => write!(f, "Unary({})",unary),
-            Gram::Binary(binary) => write!(f, "Binary({})",binary),
-            Gram::Grouping(grouping) => write!(f, "Grouping({})",grouping),
-            Gram::Expression(expr) => write!(f, "Expression({})",expr),
-            Gram::Token(token) => write!(f, "Token({})",token),
+            Gram::Literal(lit) => write!(f, "{}",lit),
+            Gram::Unary(unary) => write!(f, "{}",unary),
+            Gram::Binary(binary) => write!(f, "{}",binary),
+            Gram::Grouping(grouping) => write!(f, "{}",grouping),
+            Gram::Expression(expr) => write!(f, "{}",expr),
+            Gram::Token(token) => write!(f, "{}",token),
         }
     }
 }

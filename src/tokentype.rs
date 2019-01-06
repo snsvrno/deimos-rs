@@ -70,6 +70,11 @@ pub enum TokenType {
 
 impl std::fmt::Display for TokenType {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f,"{:?}",self)
+        match self {
+            TokenType::Identifier(text) => write!(f,"{}",text),
+            TokenType::String(text) => write!(f,"{}",text),
+            TokenType::Number(number) => write!(f,"{}",number),
+            _ => write!(f,"{:?}",self)
+        }
     }
 }

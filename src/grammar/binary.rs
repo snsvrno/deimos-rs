@@ -13,10 +13,28 @@ pub struct Binary {
 
 impl Binary {
 
-    const operation_order : [(TokenType,usize); 5] = [
-        (TokenType::Carrot,0),
-        (TokenType::Star,1), (TokenType::Slash,1),
-        (TokenType::Plus,2), (TokenType::Minus,2)
+    // order of operation constants
+    // taken from https://www.lua.org/pil/3.5.html
+    const ORDER_TIER_1 : [TokenType; 1] = [ TokenType::Carrot ];
+    const ORDER_TIER_3 : [TokenType; 2] = [ TokenType::Star, TokenType::Slash ];
+    const ORDER_TIER_4 : [TokenType; 2] = [ TokenType::Plus, TokenType::Minus ];
+    const ORDER_TIER_5 : [TokenType; 1] = [ TokenType::DoublePeriod ];
+    const ORDER_TIER_6 : [TokenType; 6] = [ 
+        TokenType::GreaterThan, TokenType::LessThan,
+        TokenType::GreaterEqual, TokenType::LessEqual,
+        TokenType::NotEqual, TokenType::EqualEqual
+    ];
+    const ORDER_TIER_7 : [TokenType; 1] = [ TokenType::And ];
+    const ORDER_TIER_8 : [TokenType; 1] = [ TokenType::Or ];
+
+    const OPERATION_ORDER : [ &'static [TokenType]; 7] = [
+        &Binary::ORDER_TIER_1,
+        &Binary::ORDER_TIER_3,
+        &Binary::ORDER_TIER_4,
+        &Binary::ORDER_TIER_5,
+        &Binary::ORDER_TIER_6,
+        &Binary::ORDER_TIER_7,
+        &Binary::ORDER_TIER_8
     ];
     
     pub fn create_from(left_token : &Gram, operator: &Gram, right_token : &Gram) -> Option<Gram> {
@@ -59,11 +77,14 @@ impl Binary {
         loop {
             
             let ops = match tier {
-                Some(t) => Binary::collect_in_tier(t),
+                Some(t) => {
+                    match Binary::OPERATION_ORDER.len() > t {
+                        true => Binary::OPERATION_ORDER[t],
+                        false => break,
+                    }
+                },
                 None => return Err(format_err!("Tier is None!! Shouldn't have happened.")),
             };
-
-            if ops.len() == 0 { break; /* we got through the end of the list of operations */ }
 
             // decided to put a loop in here so once we get a match we will start 
             // over again with that operator in case we were chaining that operator
@@ -87,7 +108,7 @@ impl Binary {
                     // goes through each operator
                     for op in ops.iter() {
                         if let Gram::Token(ref token) = grams[i+1] {
-                            if &token.get_type() == op {
+                            if token.get_type() == op {
                                 // found a match!
 
                                 // resetting the loop
@@ -160,6 +181,7 @@ impl Binary {
         Ok(())
     }
 
+/*
     fn collect_in_tier(tier : usize) -> Vec<&'static TokenType> {
         //! returns a list of operators in the desired tier,
         //! 
@@ -174,7 +196,7 @@ impl Binary {
         }
 
         tiers
-    }
+    }*/
 
 }
 
