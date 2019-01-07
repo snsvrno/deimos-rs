@@ -1,9 +1,9 @@
-use tokentype::TokenType;
-use token::Token;
-use grammar::gram::Gram;
-use grammar::expression::Expression;
+use crate::tokentype::TokenType;
+use crate::token::Token;
+use crate::grammar::gram::Gram;
+use crate::grammar::expression::Expression;
 
-use failure::Error;
+use failure::{Error,format_err};
 
 #[derive(PartialEq,Clone,Debug)]
 pub struct Unary {
@@ -20,20 +20,27 @@ impl Unary {
         &Unary::ORDER_TIER_2,
     ];
 
-    pub fn create_from(left_token : &Gram, right_token : &Gram) -> Option<Gram> {
+    pub fn create(left_token : &Gram, right_token : &Gram) -> Option<Unary> {
 
         match (left_token, right_token) {
             (Gram::Token(token), Gram::Expression(expr)) => {
                 if token == &TokenType::Minus {
-                    return Some(Gram::Unary(Box::new(Unary{
+                    return Some(Unary{
                         modifier : token.clone(),
                         expr : *expr.clone(),
-                    })));
+                    });
                 }
             },
             _ => (),
         }
         None
+    }
+
+    pub fn create_into_gram(left_token : &Gram, right_token : &Gram) -> Option<Gram> {
+        match Unary::create(left_token,right_token) {
+            None => None,
+            Some(unary) => Some(Gram::Unary(Box::new(unary)))
+        }
     }
 
     pub fn process_set(grams : &mut Vec<Gram>) -> Result<(),Error> {
@@ -111,7 +118,7 @@ impl Unary {
                         expr : expr.unwrap_expr()?,
                     }));
 
-                    match Expression::create_into_gram(new_gram) {
+                    match Expression::create_into_gram(&new_gram) {
                         None => return Err(format_err!("You shouldn't ever see this error!")), 
                         Some(expr_gram) => { grams.insert(i,expr_gram); }
                     }
@@ -156,23 +163,29 @@ impl std::fmt::Display for Unary {
     }
 }
 
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! create_unary {
+    ($left:expr, $right:expr) => {
+        &$crate::grammar::unary::Unary::create_into_gram(&$left,&$right).unwrap()
+    };
+}
+
 mod tests {
 
     #[test]
     fn basic_parsing() {
-        use tokentype::TokenType;
-        use token::Token;
-        use grammar::unary::Unary;
-        use grammar::gram::Gram;
+        use crate::tokentype::TokenType;
+        use crate::grammar::unary::Unary;
 
         // depth = -0.1234
         let token_stream = vec![
-            Gram::Token(Token::simple(TokenType::Identifier("depth".to_string()))),
-            Gram::Token(Token::simple(TokenType::Equal)),
-            Gram::Token(Token::simple(TokenType::Minus)),
-            Gram::Token(Token::simple(TokenType::Number(0.1234))).to_literal().unwrap().to_expr().unwrap(),
+            create_token!(TokenType::Identifier("depth".to_string())),
+            create_token!(TokenType::Equal),
+            create_token!(TokenType::Minus),
+            create_token!(TokenType::Number(0.1234))
         ];
 
-        assert!(Unary::create_from(&token_stream[0], &token_stream[1]).is_none());
+        assert!(Unary::create(&token_stream[0], &token_stream[1]).is_none());
     }
 }

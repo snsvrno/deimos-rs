@@ -1,6 +1,6 @@
-use grammar::gram::Gram;
-use token::Token;
-use tokentype::TokenType;
+use crate::grammar::gram::Gram;
+use crate::token::Token;
+use crate::tokentype::TokenType;
 
 // can be a number, string, bool, nil, 
 #[derive(PartialEq,Clone,Debug)]
@@ -10,15 +10,22 @@ pub struct Literal {
 
 impl Literal {
 
-    pub fn create_from(token : Token) -> Option<Gram> {
+    pub fn create(token : Token) -> Option<Literal> {
         match token.get_type() {
             TokenType::True |
             TokenType::False |
             TokenType::Nil |
             TokenType::Number(_) |
             TokenType::Identifier(_) | 
-            TokenType::String(_) => Some(Gram::Literal(Box::new(Literal{ token }))),
+            TokenType::String(_) => Some(Literal{ token }),
             _ => None,
+        }
+    }
+
+    pub fn create_into_gram(token : Token) -> Option<Gram> {
+        match Literal::create(token) {
+            None => None,
+            Some(lit) => Some(Gram::Literal(Box::new(lit)))
         }
     }
 }
@@ -29,13 +36,23 @@ impl std::fmt::Display for Literal {
     }
 }
 
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! create_literal {
+    ($tokentype:expr) => {
+        &$crate::grammar::literal::Literal::create_into_gram(
+            $crate::token::Token::simple($tokentype)
+        ).unwrap()
+    };
+}
+
 mod tests {
 
     #[test]
     fn basic_parsing() {
-        use grammar::literal::Literal;
-        use token::Token;
-        use tokentype::TokenType;
+        use crate::grammar::literal::Literal;
+        use crate::token::Token;
+        use crate::tokentype::TokenType;
 
         // creates some tokens
         let token_1 = Token::simple(TokenType::Equal);
@@ -45,12 +62,12 @@ mod tests {
         let token_5 = Token::simple(TokenType::Number(123.32));
         let token_6 = Token::simple(TokenType::LeftParen);
 
-        assert!(Literal::create_from(token_1).is_none());
-        assert!(Literal::create_from(token_2).is_some());
-        assert!(Literal::create_from(token_3).is_some());
-        assert!(Literal::create_from(token_4).is_some());
-        assert!(Literal::create_from(token_5).is_some());
-        assert!(Literal::create_from(token_6).is_none());
+        assert!(Literal::create(token_1).is_none());
+        assert!(Literal::create(token_2).is_some());
+        assert!(Literal::create(token_3).is_some());
+        assert!(Literal::create(token_4).is_some());
+        assert!(Literal::create(token_5).is_some());
+        assert!(Literal::create(token_6).is_none());
     }
     
 }

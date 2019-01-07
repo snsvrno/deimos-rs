@@ -1,8 +1,9 @@
-use tokentype::TokenType;
-use token::Token;
-use grammar::gram::Gram;
-use grammar::expression::Expression;
-use failure::Error;
+use crate::tokentype::TokenType;
+use crate::token::Token;
+use crate::grammar::gram::Gram;
+use crate::grammar::expression::Expression;
+
+use failure::{Error,format_err};
 
 #[derive(PartialEq,Clone,Debug)]
 pub struct Binary {
@@ -39,7 +40,7 @@ impl Binary {
         &Binary::ORDER_TIER_9
     ];
     
-    pub fn create_from(left_token : &Gram, operator: &Gram, right_token : &Gram) -> Option<Gram> {
+    pub fn create(left_token : &Gram, operator: &Gram, right_token : &Gram) -> Option<Binary> {
         match (left_token, operator, right_token) {
             (Gram::Expression(left_expr), Gram::Token(token), Gram::Expression(right_expr)) => {
                 match token.get_type() {
@@ -57,15 +58,22 @@ impl Binary {
                     TokenType::EqualEqual |
                     TokenType::And |
                     TokenType::Or |
-                    TokenType::Equal => Some(Gram::Binary(Box::new(Binary{
+                    TokenType::Equal => Some(Binary{
                         left_expr : *left_expr.clone(),
                         operator : token.clone(),
                         right_expr : *right_expr.clone(),
-                    }))),
+                    }),
                     _ => None,
                 }
             }
             (_, _, _) => None,
+        }
+    }
+
+    pub fn create_into_gram(left_token : &Gram, operator: &Gram, right_token : &Gram) -> Option<Gram> {
+        match Binary::create(left_token,operator,right_token) {
+            None => None,
+            Some(binary) => Some(Gram::Binary(Box::new(binary))),
         }
     }
 
@@ -141,7 +149,7 @@ impl Binary {
                     right_expr : right.unwrap_expr()?,
                 }));
 
-                match Expression::create_into_gram(new_gram) {
+                match Expression::create_into_gram(&new_gram) {
                     None => return Err(format_err!("You shouldn't ever see this error!")), 
                     Some(expr_gram) => { grams.insert(i,expr_gram); }
                 }
@@ -190,17 +198,25 @@ impl std::fmt::Display for Binary {
     }
 }
 
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! create_binary {
+    ($op:expr, $left:expr, $right:expr) => {
+        &$crate::grammar::binary::Binary::create_into_gram(&$left,&$op,&$right).unwrap()
+    };
+}
+
 mod tests {
 
     #[test]
     fn basic_parsing() {
-        use tokentype::TokenType;
-        use token::Token;
-        use grammar::binary::Binary;
-        use grammar::gram::Gram;
+        use crate::tokentype::TokenType;
+        use crate::token::Token;
+        use crate::grammar::binary::Binary;
+        use crate::grammar::gram::Gram;
 
-        let exp1 = Gram::Token(Token::simple(TokenType::Nil)).to_literal().unwrap().to_expr().unwrap();
-        let exp2 = Gram::Token(Token::simple(TokenType::String("what".to_string()))).to_literal().unwrap().to_expr().unwrap();
+        let exp1 = create_expression!(create_literal!(TokenType::Nil));
+        let exp2 = create_expression!(create_literal!(TokenType::String("What".to_string())));
 
         let carrot = Gram::Token(Token::simple(TokenType::Carrot)); 
         let star = Gram::Token(Token::simple(TokenType::Star)); 
@@ -217,33 +233,31 @@ mod tests {
         let and = Gram::Token(Token::simple(TokenType::And));
         let or = Gram::Token(Token::simple(TokenType::Or));
 
-        assert!(Binary::create_from(&exp1, &carrot, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &star, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &slash, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &or, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &double_period, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &plus, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &minus, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &less_than, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &and, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &equal_equal, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &greater_equal, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &greater_than, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &less_equal, &exp2).is_some());
-        assert!(Binary::create_from(&exp1, &not_equal, &exp2).is_some());
+        assert!(Binary::create(&exp1, &carrot, &exp2).is_some());
+        assert!(Binary::create(&exp1, &star, &exp2).is_some());
+        assert!(Binary::create(&exp1, &slash, &exp2).is_some());
+        assert!(Binary::create(&exp1, &or, &exp2).is_some());
+        assert!(Binary::create(&exp1, &double_period, &exp2).is_some());
+        assert!(Binary::create(&exp1, &plus, &exp2).is_some());
+        assert!(Binary::create(&exp1, &minus, &exp2).is_some());
+        assert!(Binary::create(&exp1, &less_than, &exp2).is_some());
+        assert!(Binary::create(&exp1, &and, &exp2).is_some());
+        assert!(Binary::create(&exp1, &equal_equal, &exp2).is_some());
+        assert!(Binary::create(&exp1, &greater_equal, &exp2).is_some());
+        assert!(Binary::create(&exp1, &greater_than, &exp2).is_some());
+        assert!(Binary::create(&exp1, &less_equal, &exp2).is_some());
+        assert!(Binary::create(&exp1, &not_equal, &exp2).is_some());
 
         let left_paren = Gram::Token(Token::simple(TokenType::LeftParen));
         let not = Gram::Token(Token::simple(TokenType::Not));
-        assert!(Binary::create_from(&exp1, &left_paren, &exp2).is_none());
-        assert!(Binary::create_from(&exp1, &not, &exp2).is_none());
+        assert!(Binary::create(&exp1, &left_paren, &exp2).is_none());
+        assert!(Binary::create(&exp1, &not, &exp2).is_none());
     }
 
     #[test]
     fn order_of_operations() {
-        use tokentype::TokenType;
-        use token::Token;
-        use grammar::binary::Binary;
-        use grammar::gram::Gram;
+        use crate::tokentype::TokenType;
+        use crate::grammar::binary::Binary;
         
         // 5 + 6 * 2 - 3
         // should do the correct order of operations and create something that looks like
@@ -252,13 +266,13 @@ mod tests {
         // ((5+(6*2))-3)
 
         let mut tokens = vec![
-            Gram::Token(Token::simple(TokenType::Number(5.0))).to_literal().unwrap().to_expr().unwrap(),
-            Gram::Token(Token::simple(TokenType::Plus)),
-            Gram::Token(Token::simple(TokenType::Number(6.0))).to_literal().unwrap().to_expr().unwrap(),
-            Gram::Token(Token::simple(TokenType::Star)),
-            Gram::Token(Token::simple(TokenType::Number(2.0))).to_literal().unwrap().to_expr().unwrap(),
-            Gram::Token(Token::simple(TokenType::Minus)),
-            Gram::Token(Token::simple(TokenType::Number(3.0))).to_literal().unwrap().to_expr().unwrap()
+            create_expression!(create_literal!(TokenType::Number(5.0))),
+            create_token!(TokenType::Plus),
+            create_expression!(create_literal!(TokenType::Number(6.0))),
+            create_token!(TokenType::Star),
+            create_expression!(create_literal!(TokenType::Number(2.0))),
+            create_token!(TokenType::Minus),
+            create_expression!(create_literal!(TokenType::Number(3.0)))
         ];
 
         if let Err(error) = Binary::process_set(&mut tokens) {

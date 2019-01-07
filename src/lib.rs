@@ -1,15 +1,14 @@
-#[macro_use] extern crate failure;
 use failure::Error;
 
-mod grammar;
+#[macro_use] mod grammar;
 mod token;
 mod tokentype;
 mod codeslice;
-mod scanner; use scanner::Scanner;
-mod tree; use tree::Tree;
+mod scanner; use crate::scanner::Scanner;
+mod tree; use crate::tree::Tree;
 
 pub fn parse(code : &str) -> Result<(),Error> {
     let scanner = Scanner::new(code).scan()?;
-    let tree = Tree::from_scanner(scanner)?.create_tree()?;
+    let _tree = Tree::from_scanner(scanner)?.create_tree()?;
     Ok(())
 }

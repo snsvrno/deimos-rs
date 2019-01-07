@@ -1,5 +1,5 @@
-use tokentype::TokenType;
-use codeslice::CodeSlice;
+use crate::tokentype::TokenType;
+use crate::codeslice::CodeSlice;
 
 #[derive(Debug,Clone)]
 pub struct Token {

@@ -1,12 +1,14 @@
-use scanner::Scanner;
+use crate::scanner::Scanner;
 use failure::Error;
 
-use token::Token;
-use grammar::gram::Gram;
-use tokentype::TokenType;
+use crate::token::Token;
+use crate::grammar::gram::Gram;
+use crate::tokentype::TokenType;
 
-use grammar::binary::Binary;
-use grammar::unary::Unary;
+use crate::grammar::binary::Binary;
+use crate::grammar::unary::Unary;
+use crate::grammar::expression::Expression;
+use crate::grammar::grouping::Grouping;
 
 pub struct Tree<'a> {
     raw_code : &'a str,
@@ -35,7 +37,12 @@ impl<'a> Tree<'a> {
                             }
                         },
                         _ => {
-                            sub_tokens.push(Gram::create(token));
+                            let gram = Gram::create(token);
+                            match Expression::create_into_gram(&gram) {
+                                None => sub_tokens.push(gram),
+                                Some(expr) => sub_tokens.push(expr),
+                            }
+                            
                         }
                     }
                 }
@@ -46,6 +53,13 @@ impl<'a> Tree<'a> {
         // catches the last tokens if there are any.
         if sub_tokens.len() > 0 {
             tokens.push(sub_tokens);
+        }
+
+        for t in tokens.iter() {
+            for t2 in t.iter() {
+                println!("");
+                println!("T : {:?}",t2);
+            }
         }
 
         let tree = Tree {
@@ -61,6 +75,9 @@ impl<'a> Tree<'a> {
         for mut line in self.tokens.iter_mut() {
             let mut tier = 0;
             loop {
+                // we'll check for grouping every iteration
+                // new groupings might be generated every time we do something.
+                
                 if tier == 3 {
                     // '-' and 'Not' should be done after checking for '-' and '+' binaries, 
                     // and then '-', '+', '*', and '/' should be done again. 
@@ -87,25 +104,68 @@ impl<'a> Tree<'a> {
     }
 }
 
-
 mod tests {
     #[test]
-    fn simple_code() {
-        use scanner::Scanner;
-        use tree::Tree;
+    fn simple_binary_code() {
+        use crate::scanner::Scanner;
+        use crate::tree::Tree;
+        use crate::tokentype::TokenType;
 
-        let scanner = Scanner::new("bob = 5 + 2 * 3").scan().unwrap();
+        
+        let scanner = Scanner::new("bob = 5 + 2").scan().unwrap();
         let tree = Tree::from_scanner(scanner).unwrap().create_tree().unwrap();
+
+        let test_against = create_expression!(create_binary!(
+            create_token!(TokenType::Equal),
+            create_expression!(create_literal!(TokenType::Identifier("bob".to_string()))),
+            create_expression!(create_binary!(
+                create_token!(TokenType::Plus),
+                create_expression!(create_literal!(TokenType::Number(5.0))),
+                create_expression!(create_literal!(TokenType::Number(2.0)))
+            ))
+        ));
 
         assert_eq!(tree.tokens.len(),1);
         assert_eq!(tree.tokens[0].len(),1);
+        
+        if tree.tokens[0][0] != test_against {
+            panic!("Equality check failed.\n\n  Left: {}\n  Right: {}\n\n",
+                tree.tokens[0][0],
+                test_against
+            );
+        }
+    }
 
+    #[test]
+    fn simple_binary_unary_code() {
+        use crate::scanner::Scanner;
+        use crate::tree::Tree;
+        use crate::tokentype::TokenType;
+        
         let scanner = Scanner::new("bob = 5 + -2").scan().unwrap();
         let tree = Tree::from_scanner(scanner).unwrap().create_tree().unwrap();
 
+        let test_against = create_expression!(create_binary!(
+            create_token!(TokenType::Equal),
+            create_expression!(create_literal!(TokenType::Identifier("bob".to_string()))),
+            create_expression!(create_binary!(
+                create_token!(TokenType::Plus),
+                create_expression!(create_literal!(TokenType::Number(5.0))),
+                create_expression!(create_unary!(
+                    create_token!(TokenType::Minus),
+                    create_expression!(create_literal!(TokenType::Number(2.0)))
+                ))
+            ))
+        ));
+
         assert_eq!(tree.tokens.len(),1);
         assert_eq!(tree.tokens[0].len(),1);
+        if tree.tokens[0][0] != test_against {
+            panic!("Equality check failed.\n\n  Left: {}\n  Right: {}\n\n",
+                tree.tokens[0][0],
+                test_against
+            );
+        }
 
-        assert!(false);
     }
 }

@@ -1,8 +1,8 @@
-use token::Token;
-use tokentype::TokenType;
-use codeslice::CodeSlice;
+use crate::token::Token;
+use crate::tokentype::TokenType;
+use crate::codeslice::CodeSlice;
 
-use failure::Error;
+use failure::{Error,format_err};
 
 /// scanner that converts raw source code into 
 /// tokens
@@ -64,7 +64,7 @@ impl<'a> Scanner<'a> {
         Ok(self)
     }
     
-    pub fn explode(mut self) -> (&'a str, Vec<Token>) {
+    pub fn explode(self) -> (&'a str, Vec<Token>) {
         (self.raw_code,self.tokens)
     }
 
@@ -320,8 +320,8 @@ mod tests {
         //! tests the token scanning, making sure if we pass a string of the 
         //! exact token it will correctly identify which token we want.
         
-        use scanner::Scanner;
-        use tokentype::TokenType;
+        use crate::scanner::Scanner;
+        use crate::tokentype::TokenType;
 
         //////////////////////////////////////////////////////////////
         // +     -     *     /     %     ^     #

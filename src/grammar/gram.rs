@@ -1,11 +1,11 @@
-use grammar::literal::Literal;
-use grammar::expression::Expression;
-use grammar::binary::Binary;
-use grammar::unary::Unary;
-use grammar::grouping::Grouping;
-use token::Token;
+use crate::grammar::literal::Literal;
+use crate::grammar::expression::Expression;
+use crate::grammar::binary::Binary;
+use crate::grammar::unary::Unary;
+use crate::grammar::grouping::Grouping;
+use crate::token::Token;
 
-use failure::Error;
+use failure::{Error,format_err};
 
 #[derive(PartialEq,Clone,Debug)]
 pub enum Gram {
@@ -19,50 +19,25 @@ pub enum Gram {
 
 impl Gram {
     pub fn create(token : Token) -> Gram {
-        match Literal::create_from(token.clone()) {
-            Some(lit) => match Expression::create_into_gram(lit) {
-                Some(expr) => expr,
-                None => panic!("can't happen"),
-            },
+        match Literal::create_into_gram(token.clone()) {
+            Some(lit) => lit,
             None => Gram::Token(token),
         }
     }
 
-    pub fn to_literal(mut self) -> Result<Gram,Error> {
-
-        if let Gram::Token(token) = self {
-            if let Some(lit) = Literal::create_from(token) {
-                return Ok(lit);
-            }
-        }
-
-        Err(format_err!("Can't convert to an Literal unless its a valid Literal"))
-    }
-
-    pub fn to_expr(mut self) -> Result<Gram,Error> {
-        match Expression::create_from(self) {
-            None => Err(format_err!("Can't convert to an Expression unless its a valid Expression")),
-            Some(expr) => Ok(Gram::Expression(Box::new(expr)))
-        }
-    }
-
-
-    pub fn unwrap_expr(mut self) -> Result<Expression,Error> {
+    pub fn unwrap_expr(self) -> Result<Expression,Error> {
         match self {
             Gram::Expression(expr) => Ok(*expr),
             _ => Err(format_err!("Can't unwrap '{:?}' as an Expression.",self)),
         }
     }
 
-    pub fn unwrap_token(mut self) -> Result<Token,Error> {
+    pub fn unwrap_token(self) -> Result<Token,Error> {
         match self {
             Gram::Token(token) => Ok(token),
             _ => Err(format_err!("Can't unwrap '{:?}' as a Token.",self)),
         }
     }
-
-
-
 
     pub fn is_literal(&self) -> bool {
         match self {
@@ -100,6 +75,26 @@ impl Gram {
             _ => false,
         }
     }
+}
+
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! create_token {
+    ($tokentype:expr) => {
+        $crate::grammar::gram::Gram::Token(
+            $crate::token::Token::simple($tokentype)
+        )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export(local_inner_macros)]
+macro_rules! create_gram {
+    ($tokentype:expr) => {
+        $crate::grammar::gram::Gram::create(
+            $crate::token::Token::simple($tokentype)
+        )
+    };
 }
 
 impl std::fmt::Display for Gram {
