@@ -79,7 +79,7 @@ impl Gram {
 
 #[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! create_token {
+macro_rules! token {
     ($tokentype:expr) => {
         $crate::grammar::gram::Gram::Token(
             $crate::token::Token::simple($tokentype)
@@ -89,7 +89,7 @@ macro_rules! create_token {
 
 #[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! create_gram {
+macro_rules! gram {
     ($tokentype:expr) => {
         $crate::grammar::gram::Gram::create(
             $crate::token::Token::simple($tokentype)

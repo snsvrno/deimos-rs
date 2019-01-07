@@ -3,4 +3,4 @@
 #[macro_use] pub mod gram;
 #[macro_use] pub mod unary;
 #[macro_use] pub mod binary;
-pub mod grouping;
+#[macro_use] pub mod grouping;

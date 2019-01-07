@@ -35,7 +35,7 @@ impl std::fmt::Display for Expression {
 
 #[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! create_expression {
+macro_rules! expression {
     ($gram:expr) => {
         $crate::grammar::expression::Expression::create_into_gram($gram).unwrap()
     };

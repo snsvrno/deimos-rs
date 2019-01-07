@@ -165,9 +165,9 @@ impl std::fmt::Display for Unary {
 
 #[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! create_unary {
+macro_rules! unary {
     ($left:expr, $right:expr) => {
-        &$crate::grammar::unary::Unary::create_into_gram(&$left,&$right).unwrap()
+        $crate::grammar::unary::Unary::create_into_gram(&$left,&$right).unwrap()
     };
 }
 
@@ -180,10 +180,10 @@ mod tests {
 
         // depth = -0.1234
         let token_stream = vec![
-            create_token!(TokenType::Identifier("depth".to_string())),
-            create_token!(TokenType::Equal),
-            create_token!(TokenType::Minus),
-            create_token!(TokenType::Number(0.1234))
+            token!(TokenType::Identifier("depth".to_string())),
+            token!(TokenType::Equal),
+            token!(TokenType::Minus),
+            token!(TokenType::Number(0.1234))
         ];
 
         assert!(Unary::create(&token_stream[0], &token_stream[1]).is_none());

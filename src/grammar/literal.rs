@@ -38,9 +38,9 @@ impl std::fmt::Display for Literal {
 
 #[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! create_literal {
+macro_rules! literal {
     ($tokentype:expr) => {
-        &$crate::grammar::literal::Literal::create_into_gram(
+        $crate::grammar::literal::Literal::create_into_gram(
             $crate::token::Token::simple($tokentype)
         ).unwrap()
     };

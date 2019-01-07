@@ -200,9 +200,9 @@ impl std::fmt::Display for Binary {
 
 #[doc(hidden)]
 #[macro_export(local_inner_macros)]
-macro_rules! create_binary {
+macro_rules! binary {
     ($op:expr, $left:expr, $right:expr) => {
-        &$crate::grammar::binary::Binary::create_into_gram(&$left,&$op,&$right).unwrap()
+        $crate::grammar::binary::Binary::create_into_gram(&$left,&$op,&$right).unwrap()
     };
 }
 
@@ -215,8 +215,8 @@ mod tests {
         use crate::grammar::binary::Binary;
         use crate::grammar::gram::Gram;
 
-        let exp1 = create_expression!(create_literal!(TokenType::Nil));
-        let exp2 = create_expression!(create_literal!(TokenType::String("What".to_string())));
+        let exp1 = expression!(&literal!(TokenType::Nil));
+        let exp2 = expression!(&literal!(TokenType::String("What".to_string())));
 
         let carrot = Gram::Token(Token::simple(TokenType::Carrot)); 
         let star = Gram::Token(Token::simple(TokenType::Star)); 
@@ -266,13 +266,13 @@ mod tests {
         // ((5+(6*2))-3)
 
         let mut tokens = vec![
-            create_expression!(create_literal!(TokenType::Number(5.0))),
-            create_token!(TokenType::Plus),
-            create_expression!(create_literal!(TokenType::Number(6.0))),
-            create_token!(TokenType::Star),
-            create_expression!(create_literal!(TokenType::Number(2.0))),
-            create_token!(TokenType::Minus),
-            create_expression!(create_literal!(TokenType::Number(3.0)))
+            expression!(&literal!(TokenType::Number(5.0))),
+            token!(TokenType::Plus),
+            expression!(&literal!(TokenType::Number(6.0))),
+            token!(TokenType::Star),
+            expression!(&literal!(TokenType::Number(2.0))),
+            token!(TokenType::Minus),
+            expression!(&literal!(TokenType::Number(3.0)))
         ];
 
         if let Err(error) = Binary::process_set(&mut tokens) {
