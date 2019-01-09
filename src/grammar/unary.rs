@@ -15,7 +15,7 @@ impl Unary {
     
     // order of operation constants
     // taken from https://www.lua.org/pil/3.5.html
-    const ORDER_TIER_2 : [TokenType; 2] = [ TokenType::Minus, TokenType::Not ];
+    const ORDER_TIER_2 : [TokenType; 3] = [ TokenType::Minus, TokenType::Not, TokenType::Local ];
     const OPERATION_ORDER : [ &'static [TokenType]; 1] = [
         &Unary::ORDER_TIER_2,
     ];
@@ -24,11 +24,16 @@ impl Unary {
 
         match (left_token, right_token) {
             (Gram::Token(token), Gram::Expression(expr)) => {
-                if token == &TokenType::Minus {
-                    return Some(Unary{
-                        modifier : token.clone(),
-                        expr : *expr.clone(),
-                    });
+                for tier in Unary::OPERATION_ORDER.iter() {
+                    // might as well use the ones defined up there and not define it twice.
+                    for op in tier.iter() {
+                        if token == op {
+                            return Some(Unary{
+                                modifier : token.clone(),
+                                expr : *expr.clone(),
+                            });
+                        }
+                    }
                 }
             },
             _ => (),
@@ -180,12 +185,16 @@ mod tests {
 
         // depth = -0.1234
         let token_stream = vec![
-            token!(TokenType::Identifier("depth".to_string())),
+            token!(TokenType::Local),
+            expression!(&literal!(TokenType::Identifier("depth".to_string()))),
             token!(TokenType::Equal),
             token!(TokenType::Minus),
-            token!(TokenType::Number(0.1234))
+            expression!(&literal!(TokenType::Number(0.1234)))
         ];
 
-        assert!(Unary::create(&token_stream[0], &token_stream[1]).is_none());
+        assert!(Unary::create(&token_stream[0], &token_stream[1]).is_some()); // local depth
+        assert!(Unary::create(&token_stream[1], &token_stream[2]).is_none()); // depth = 
+        assert!(Unary::create(&token_stream[2], &token_stream[3]).is_none()); // = -
+        assert!(Unary::create(&token_stream[3], &token_stream[4]).is_some()); // - 0.1234
     }
 }
