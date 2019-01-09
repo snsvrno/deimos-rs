@@ -1,5 +1,7 @@
 use crate::tokentype::TokenType;
 use crate::token::Token;
+use crate::chunk::Chunk;
+
 use crate::grammar::gram::Gram;
 use crate::grammar::expression::Expression;
 
@@ -48,11 +50,11 @@ impl Unary {
         }
     }
 
-    pub fn process_set(grams : &mut Vec<Gram>) -> Result<(),Error> {
+    pub fn process_set(chunk : &mut Chunk) -> Result<(),Error> {
 
-        // needs at least Grams in order to match a binary, since the binary 
+        // needs at least chunk in order to match a binary, since the binary 
         // is 3 Expr (op) Expr, else it will just return.
-        if grams.len() < 2 { return Ok(()); }
+        if chunk.len() < 2 { return Ok(()); }
 
         // goes through the order of operations, for all operations
         let mut tier : Option<usize> = Some(0);
@@ -77,19 +79,19 @@ impl Unary {
             loop {
 
                 // used to go through this loop again if we found a match.
-                // the usize is the position of the matching set of Grams
+                // the usize is the position of the matching set of chunk
                 let mut reset_loop : Option<usize> = None;
 
-                // get a group of 3 grams and check it against all of the operators in the group
-                for i in 0 .. (grams.len()-1) {
+                // get a group of 3 chunk and check it against all of the operators in the group
+                for i in 0 .. (chunk.len()-1) {
                     // first we check if it matches the general patter for a binary,
-                    // if the 1st and 3rd grams aren't expressions we move on to the next
-                    // group of grams
-                    if !grams[i].is_token() || !grams[i+1].is_expression() { continue; }
+                    // if the 1st and 3rd chunk aren't expressions we move on to the next
+                    // group of chunk
+                    if !chunk.at(i).is_token() || !chunk.at(i+1).is_expression() { continue; }
                     
                     // goes through each operator
                     for op in ops.iter() {
-                        if let Gram::Token(ref token) = grams[i] {
+                        if let Gram::Token(ref token) = chunk.at(i) {
                             if token.get_type() == op {
                                 // found a match!
 
@@ -107,13 +109,13 @@ impl Unary {
                 // modifying the gram vec if we found a match in the above loop
                 if let Some(i) = reset_loop {
 
-                    // removing the 3 Grams and putting them in a format that can be used.
-                    let mut removed_tokens : Vec<Gram> = grams.drain(i .. i + 2).collect();
+                    // removing the 3 chunk and putting them in a format that can be used.
+                    let mut removed_tokens : Vec<Gram> = chunk.remove(i,i+2);
 
                     let expr : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                        return Err(format_err!("Failed to build Unary, tried to remove 1/2 Grams but failed.")); };
+                        return Err(format_err!("Failed to build Unary, tried to remove 1/2 chunk but failed.")); };
                     let modifier : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                        return Err(format_err!("Failed to build Unary, tried to remove 2/2 Grams but failed.")); };
+                        return Err(format_err!("Failed to build Unary, tried to remove 2/2 chunk but failed.")); };
 
                     // creates the new gram, needs to unwrap the pieces, they will error
                     // if somehow we got mismatched types, but this shouldn't happen
@@ -125,12 +127,12 @@ impl Unary {
 
                     match Expression::create_into_gram(&new_gram) {
                         None => return Err(format_err!("You shouldn't ever see this error!")), 
-                        Some(expr_gram) => { grams.insert(i,expr_gram); }
+                        Some(expr_gram) => { chunk.insert(i,expr_gram); }
                     }
 
-                    // need to check if we have enough Grams to actually continue, if we get less than 3 there is 
+                    // need to check if we have enough chunk to actually continue, if we get less than 3 there is 
                     // no way to match anything anymore so we should finish.
-                    if grams.len() < 2 { return Ok(()); }
+                    if chunk.len() < 2 { return Ok(()); }
 
                     // counts as a reset for the tier, we need to do this because we just matched an operation,
                     // maybe there was another operation further up the stack that we didn't match because it

@@ -1,5 +1,7 @@
 use crate::tokentype::TokenType;
 use crate::token::Token;
+use crate::chunk::Chunk;
+
 use crate::grammar::gram::Gram;
 use crate::grammar::expression::Expression;
 
@@ -77,11 +79,11 @@ impl Binary {
         }
     }
 
-    pub fn process_set_increment(grams : &mut Vec<Gram>, tier : usize) -> Result<Option<usize>,Error> {
+    pub fn process_set_increment(chunk : &mut Chunk, tier : usize) -> Result<Option<usize>,Error> {
 
-        // needs at least Grams in order to match a binary, since the binary 
+        // needs at least chunk in order to match a binary, since the binary 
         // is 3 Expr (op) Expr, else it will just return.
-        if grams.len() < 3 { return Ok(None); }
+        if chunk.len() < 3 { return Ok(None); }
 
         // goes through the order of operations, for all operations
         // let mut tier : Option<usize> = Some(0);
@@ -100,19 +102,19 @@ impl Binary {
             loop {
 
             // used to go through this loop again if we found a match.
-            // the usize is the position of the matching set of Grams
+            // the usize is the position of the matching set of chunk
             let mut reset_loop : Option<usize> = None;
 
-            // get a group of 3 grams and check it against all of the operators in the group
-            for i in 0 .. (grams.len()-2) {
+            // get a group of 3 chunk and check it against all of the operators in the group
+            for i in 0 .. (chunk.len()-2) {
                 // first we check if it matches the general patter for a binary,
-                // if the 1st and 3rd grams aren't expressions we move on to the next
-                // group of grams
-                if !grams[i].is_expression() || !grams[i+2].is_expression() { continue; }
+                // if the 1st and 3rd chunk aren't expressions we move on to the next
+                // group of chunk
+                if !chunk.at(i).is_expression() || !chunk.at(i+2).is_expression() { continue; }
                 
                 // goes through each operator
                 for op in ops.iter() {
-                    if let Gram::Token(ref token) = grams[i+1] {
+                    if let Gram::Token(ref token) = chunk.at(i+1) {
                         if token.get_type() == op {
                             // found a match!
 
@@ -130,15 +132,15 @@ impl Binary {
             // modifying the gram vec if we found a match in the above loop
             if let Some(i) = reset_loop {
 
-                // removing the 3 Grams and putting them in a format that can be used.
-                let mut removed_tokens : Vec<Gram> = grams.drain(i .. i + 3).collect();
+                // removing the 3 chunk and putting them in a format that can be used.
+                let mut removed_tokens : Vec<Gram> = chunk.remove(i,i+3);
 
                 let right : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                    return Err(format_err!("Failed to build Binary, tried to remove 1/3 Grams but failed.")); };
+                    return Err(format_err!("Failed to build Binary, tried to remove 1/3 chunk but failed.")); };
                 let middle : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                    return Err(format_err!("Failed to build Binary, tried to remove 2/3 Grams but failed.")); };
+                    return Err(format_err!("Failed to build Binary, tried to remove 2/3 chunk but failed.")); };
                 let left : Gram = if let Some(gram) = removed_tokens.pop() { gram } else { 
-                    return Err(format_err!("Failed to build Binary, tried to remove 3/3 Grams but failed.")); };
+                    return Err(format_err!("Failed to build Binary, tried to remove 3/3 chunk but failed.")); };
 
                 // creates the new gram, needs to unwrap the pieces, they will error
                 // if somehow we got mismatched types, but this shouldn't happen
@@ -151,12 +153,12 @@ impl Binary {
 
                 match Expression::create_into_gram(&new_gram) {
                     None => return Err(format_err!("You shouldn't ever see this error!")), 
-                    Some(expr_gram) => { grams.insert(i,expr_gram); }
+                    Some(expr_gram) => { chunk.insert(i,expr_gram); }
                 }
 
-                // need to check if we have enough Grams to actually continue, if we get less than 3 there is 
+                // need to check if we have enough chunk to actually continue, if we get less than 3 there is 
                 // no way to match anything anymore so we should finish.
-                if grams.len() < 3 { return Ok(None); }
+                if chunk.len() < 3 { return Ok(None); }
 
                 // counts as a reset for the tier, we need to do this because we just matched an operation,
                 // maybe there was another operation further up the stack that we didn't match because it
@@ -175,11 +177,11 @@ impl Binary {
         }
     }
 
-    pub fn process_set(grams : &mut Vec<Gram>) -> Result<(),Error> {
+    pub fn process_set(chunk : &mut Chunk) -> Result<(),Error> {
         let mut tier = 0;
         
         loop {
-            match Binary::process_set_increment(grams,tier)? {
+            match Binary::process_set_increment(chunk,tier)? {
                 None => break,
                 Some(t) => {
                     tier = t;
@@ -257,6 +259,8 @@ mod tests {
     #[test]
     fn order_of_operations() {
         use crate::tokentype::TokenType;
+        use crate::chunk::Chunk;
+
         use crate::grammar::binary::Binary;
         
         // 5 + 6 * 2 - 3
@@ -265,7 +269,7 @@ mod tests {
         // (5 + (6*2)) - 3
         // ((5+(6*2))-3)
 
-        let mut tokens = vec![
+        let mut tokens = Chunk::new_from(vec![
             expression!(&literal!(TokenType::Number(5.0))),
             token!(TokenType::Plus),
             expression!(&literal!(TokenType::Number(6.0))),
@@ -273,7 +277,7 @@ mod tests {
             expression!(&literal!(TokenType::Number(2.0))),
             token!(TokenType::Minus),
             expression!(&literal!(TokenType::Number(3.0)))
-        ];
+        ]);
 
         if let Err(error) = Binary::process_set(&mut tokens) {
             panic!("ERROR : {}",error);

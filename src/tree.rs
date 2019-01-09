@@ -2,9 +2,10 @@ use crate::scanner::Scanner;
 use failure::Error;
 
 use crate::token::Token;
-use crate::grammar::gram::Gram;
 use crate::tokentype::TokenType;
+use crate::chunk::Chunk;
 
+use crate::grammar::gram::Gram;
 use crate::grammar::binary::Binary;
 use crate::grammar::unary::Unary;
 use crate::grammar::expression::Expression;
@@ -12,15 +13,15 @@ use crate::grammar::grouping::Grouping;
 
 pub struct Tree<'a> {
     raw_code : &'a str,
-    tokens : Vec<Vec<Gram>>,
+    tokens : Vec<Chunk>,
 }
 
 impl<'a> Tree<'a> {
     pub fn from_scanner(scanner : Scanner<'a>) -> Result<Tree,Error> {
         let (raw_code,mut raw_tokens) = scanner.explode();
 
-        let mut tokens : Vec<Vec<Gram>> = Vec::new();
-        let mut sub_tokens : Vec<Gram> = Vec::new();
+        let mut tokens : Vec<Chunk> = Vec::new();
+        let mut sub_tokens : Chunk = Chunk::new();
 
         // loops through the linear list of tokens and groups them into statements.
         loop {
@@ -31,16 +32,16 @@ impl<'a> Tree<'a> {
                 Some(token) => {
                     match token.get_type() {
                         TokenType::EOL => {
-                            if sub_tokens.len() > 0 { 
+                            if !sub_tokens.is_empty() { 
                                 tokens.push(sub_tokens);
-                                sub_tokens = Vec::new();
+                                sub_tokens = Chunk::new();
                             }
                         },
                         _ => {
                             let gram = Gram::create(token);
                             match Expression::create_into_gram(&gram) {
-                                None => sub_tokens.push(gram),
-                                Some(expr) => sub_tokens.push(expr),
+                                None => sub_tokens.add(gram),
+                                Some(expr) => sub_tokens.add(expr),
                             }
                             
                         }
@@ -51,7 +52,7 @@ impl<'a> Tree<'a> {
         }
 
         // catches the last tokens if there are any.
-        if sub_tokens.len() > 0 {
+        if !sub_tokens.is_empty() {
             tokens.push(sub_tokens);
         }
 
@@ -101,9 +102,9 @@ impl<'a> Tree<'a> {
 
         for line in self.tokens.iter() {
             //println!("====");
-            for token in line.iter() {
+            //for token in line.iter() {
             //    println!("{}",token);
-            }
+            //}
         }
 
         Ok(self)
@@ -134,9 +135,9 @@ mod tests {
         assert_eq!(tree.tokens.len(),1);
         assert_eq!(tree.tokens[0].len(),1);
         
-        if tree.tokens[0][0] != test_against {
+        if tree.tokens[0].at(0) != &test_against {
             panic!("Equality check failed.\n\n  Left: {}\n  Right: {}\n\n",
-                tree.tokens[0][0],
+                tree.tokens[0].at(0),
                 test_against
             );
         }
@@ -166,9 +167,10 @@ mod tests {
 
         assert_eq!(tree.tokens.len(),1);
         assert_eq!(tree.tokens[0].len(),1);
-        if tree.tokens[0][0] != test_against {
+        
+        if tree.tokens[0].at(0) != &test_against {
             panic!("Equality check failed.\n\n  Left: {}\n  Right: {}\n\n",
-                tree.tokens[0][0],
+                tree.tokens[0].at(0),
                 test_against
             );
         }
@@ -200,9 +202,10 @@ mod tests {
 
         assert_eq!(tree.tokens.len(),1);
         assert_eq!(tree.tokens[0].len(),1);
-        if tree.tokens[0][0] != test_against {
+
+        if tree.tokens[0].at(0) != &test_against {
             panic!("Equality check failed.\n\n  Left: {}\n  Right: {}\n\n",
-                tree.tokens[0][0],
+                tree.tokens[0].at(0),
                 test_against
             );
         }

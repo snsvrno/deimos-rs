@@ -4,6 +4,7 @@ use failure::Error;
 mod token;
 mod tokentype;
 mod codeslice;
+mod chunk;
 mod scanner; use crate::scanner::Scanner;
 mod tree; use crate::tree::Tree;
 
