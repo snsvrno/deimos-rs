@@ -6,4 +6,5 @@
 #[macro_use] pub mod grouping;
 
 pub mod blockdo;
+pub mod blockrepeat;
 pub mod blockwhile;

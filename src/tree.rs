@@ -13,6 +13,7 @@ use crate::grammar::grouping::Grouping;
 
 use crate::grammar::blockdo::BlockDo;
 use crate::grammar::blockwhile::BlockWhile;
+use crate::grammar::blockrepeat::BlockRepeat;
 
 pub struct Tree<'a> {
     raw_code : &'a str,
@@ -42,6 +43,8 @@ impl<'a> Tree<'a> {
                             }
                         },
                         // special tokens that should be on their own Chunk
+                        TokenType::Repeat |
+                        TokenType::Until |
                         TokenType::While |
                         TokenType::End | 
                         TokenType::Do => {
@@ -121,6 +124,7 @@ impl<'a> Tree<'a> {
         }
 
         // now that everything is 'compressed', lets try and find some blocks
+        BlockRepeat::process(&mut self.tokens)?;
         BlockWhile::process(&mut self.tokens)?;
         BlockDo::process(&mut self.tokens)?;
 

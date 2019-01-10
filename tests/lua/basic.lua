@@ -12,3 +12,8 @@ while bob > 3 do
     bob = bob - 1
     bob = bob - 1
 end
+
+repeat
+    bob = bob + 1
+    bob = bob + 2
+until bob > 34

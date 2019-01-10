@@ -6,7 +6,9 @@ mod helpers;
 fn basic() {
     let code = helpers::load_file("basic");
 
-    lua_interpreter::parse(&code);
+    if let Err(error) = lua_interpreter::parse(&code){
+        panic!("{}",error);
+    }
 
     assert!(false);
 }
