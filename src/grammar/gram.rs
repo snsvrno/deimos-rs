@@ -7,6 +7,7 @@ use crate::grammar::grouping::Grouping;
 use crate::grammar::blockdo::BlockDo;
 use crate::grammar::blockrepeat::BlockRepeat;
 use crate::grammar::blockwhile::BlockWhile;
+use crate::grammar::blockif::BlockIf;
 
 use crate::token::Token;
 
@@ -22,6 +23,7 @@ pub enum Gram {
     BlockDo(Box<BlockDo>),
     BlockWhile(Box<BlockWhile>),
     BlockRepeat(Box<BlockRepeat>),
+    BlockIf(Box<BlockIf>),
     Token(Token),
 }
 
@@ -117,6 +119,7 @@ impl std::fmt::Display for Gram {
             Gram::BlockDo(block) => write!(f,"{}",block),
             Gram::BlockWhile(block) => write!(f,"{}",block),
             Gram::BlockRepeat(block) => write!(f,"{}",block),
+            Gram::BlockIf(block) => write!(f,"{}",block),
         }
     }
 }

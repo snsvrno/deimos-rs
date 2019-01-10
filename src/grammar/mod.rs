@@ -8,3 +8,4 @@
 pub mod blockdo;
 pub mod blockrepeat;
 pub mod blockwhile;
+pub mod blockif;
