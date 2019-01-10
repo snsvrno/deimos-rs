@@ -7,3 +7,8 @@ do
 end
 
 do bob = 1223 end
+
+while bob > 3 do
+    bob = bob - 1
+    bob = bob - 1
+end
