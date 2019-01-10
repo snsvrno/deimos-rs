@@ -3,6 +3,9 @@ use crate::grammar::expression::Expression;
 use crate::grammar::binary::Binary;
 use crate::grammar::unary::Unary;
 use crate::grammar::grouping::Grouping;
+
+use crate::grammar::blockdo::BlockDo;
+
 use crate::token::Token;
 
 use failure::{Error,format_err};
@@ -14,6 +17,7 @@ pub enum Gram {
     Binary(Box<Binary>),
     Grouping(Box<Grouping>),
     Expression(Box<Expression>),
+    BlockDo(Box<BlockDo>),
     Token(Token),
 }
 
@@ -106,6 +110,7 @@ impl std::fmt::Display for Gram {
             Gram::Grouping(grouping) => write!(f, "{}",grouping),
             Gram::Expression(expr) => write!(f, "{}",expr),
             Gram::Token(token) => write!(f, "{}",token),
+            Gram::BlockDo(block) => write!(f,"{}",block),
         }
     }
 }

@@ -10,7 +10,7 @@
 
 use crate::grammar::gram::Gram;
 
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub struct Chunk {
     elements : Vec<Gram>,
 }
@@ -22,15 +22,15 @@ impl Chunk {
         }
     }
 
+    pub fn wrap(gram : Gram) -> Chunk {
+        Chunk {
+            elements : vec![gram],
+        }
+    }
+
     pub fn new_from(chunk : Vec<Gram>) -> Chunk {
         Chunk {
             elements : chunk,
-        }
-    }
-    pub fn is_empty(&self) -> bool {
-        match self.elements.len() > 1 {
-            true => false,
-            false => true,
         }
     }
 
@@ -52,5 +52,23 @@ impl Chunk {
 
     pub fn insert(&mut self, index : usize, gram : Gram) {
         self.elements.insert(index,gram);
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<Gram> {
+        self.elements.iter()
+    }
+}
+
+impl std::fmt::Display for Chunk {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut statement : String = String::new();
+        for c in 0 .. self.elements.len() {
+            if c == 0 {
+                statement = format!("{}",self.elements[c]);
+            } else {
+                statement = format!("{}, {}",statement,self.elements[c]);
+            }
+        }
+        write!(f,"{}",statement)
     }
 }

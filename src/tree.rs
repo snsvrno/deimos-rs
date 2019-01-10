@@ -11,6 +11,8 @@ use crate::grammar::unary::Unary;
 use crate::grammar::expression::Expression;
 use crate::grammar::grouping::Grouping;
 
+use crate::grammar::blockdo::BlockDo;
+
 pub struct Tree<'a> {
     raw_code : &'a str,
     tokens : Vec<Chunk>,
@@ -31,11 +33,26 @@ impl<'a> Tree<'a> {
                 None => break,
                 Some(token) => {
                     match token.get_type() {
+                        TokenType::SemiColon | 
                         TokenType::EOL => {
-                            if !sub_tokens.is_empty() { 
+                            if sub_tokens.len() > 0 { 
                                 tokens.push(sub_tokens);
                                 sub_tokens = Chunk::new();
                             }
+                        },
+                        // special tokens that should be on their own Chunk
+                        TokenType::End | 
+                        TokenType::Do => {
+                            if sub_tokens.len() > 0 {
+                                tokens.push(sub_tokens);
+                                sub_tokens = Chunk::new();
+                            }
+
+                            let gram = Gram::create(token);
+                            match Expression::create_into_gram(&gram) {
+                                None => tokens.push(Chunk::new_from(vec![gram])),
+                                Some(expr) => tokens.push(Chunk::new_from(vec![expr])),
+                            }                           
                         },
                         _ => {
                             let gram = Gram::create(token);
@@ -52,7 +69,7 @@ impl<'a> Tree<'a> {
         }
 
         // catches the last tokens if there are any.
-        if !sub_tokens.is_empty() {
+        if sub_tokens.len() > 0 {
             tokens.push(sub_tokens);
         }
 
@@ -66,6 +83,7 @@ impl<'a> Tree<'a> {
 
     pub fn create_tree(mut self) -> Result<Self,Error> {
 
+        // works on all the grams, except for blocks
         for mut line in self.tokens.iter_mut() {
             let mut tier = 0;
             loop {
@@ -100,11 +118,15 @@ impl<'a> Tree<'a> {
             }
         }
 
+        // now that everything is 'compressed', lets try and find some blocks
+        BlockDo::process(&mut self.tokens)?;
+
+
         for line in self.tokens.iter() {
-            //println!("====");
-            //for token in line.iter() {
-            //    println!("{}",token);
-            //}
+            println!("====");
+            for token in line.iter() {
+                println!("{}",token);
+            }
         }
 
         Ok(self)
