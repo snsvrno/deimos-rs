@@ -7,7 +7,7 @@ use crate::grammar::expression::Expression;
 
 use failure::{Error,format_err};
 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub struct Grouping {
     expr : Expression,
 }
@@ -94,6 +94,13 @@ impl Grouping {
 impl std::fmt::Display for Grouping {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f,"<{}>",self.expr)
+    }
+}
+
+
+impl std::fmt::Debug for Grouping {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"G<{:?}>",self.expr)
     }
 }
 

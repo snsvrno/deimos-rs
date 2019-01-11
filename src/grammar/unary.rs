@@ -7,7 +7,7 @@ use crate::grammar::expression::Expression;
 
 use failure::{Error,format_err};
 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub struct Unary {
     modifier : Token,
     expr : Expression,
@@ -167,6 +167,12 @@ impl Unary {
 impl std::fmt::Display for Unary {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f,"({} {})",self.modifier,self.expr)
+    }
+}
+
+impl std::fmt::Debug for Unary {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"U<{:?},{:?}>",self.modifier,self.expr)
     }
 }
 

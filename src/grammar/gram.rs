@@ -13,7 +13,7 @@ use crate::token::Token;
 
 use failure::{Error,format_err};
 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub enum Gram {
     Literal(Box<Literal>),
     Unary(Box<Unary>),
@@ -120,6 +120,23 @@ impl std::fmt::Display for Gram {
             Gram::BlockWhile(block) => write!(f,"{}",block),
             Gram::BlockRepeat(block) => write!(f,"{}",block),
             Gram::BlockIf(block) => write!(f,"{}",block),
+        }
+    }
+}
+
+impl std::fmt::Debug for Gram {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Gram::Literal(lit) => write!(f, "GL<{:?}>",lit),
+            Gram::Unary(unary) => write!(f, "GU<{:?}>",unary),
+            Gram::Binary(binary) => write!(f, "GB<{:?}>",binary),
+            Gram::Grouping(grouping) => write!(f, "GG<{:?}>",grouping),
+            Gram::Expression(expr) => write!(f, "GE<{:?}>",expr),
+            Gram::Token(token) => write!(f, "GT<{:?}>",token),
+            Gram::BlockDo(block) => write!(f,"GBD<{:?}>",block),
+            Gram::BlockWhile(block) => write!(f,"GBW<{:?}>",block),
+            Gram::BlockRepeat(block) => write!(f,"GBR<{:?}>",block),
+            Gram::BlockIf(block) => write!(f,"GBI<{:?}>",block),
         }
     }
 }

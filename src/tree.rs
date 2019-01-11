@@ -22,6 +22,13 @@ pub struct Tree<'a> {
 }
 
 impl<'a> Tree<'a> {
+    pub fn simple(chunks : Vec<Chunk>) -> Tree<'static> {
+        Tree {
+            raw_code : "",
+            tokens : chunks,
+        }
+    }
+
     pub fn from_scanner(scanner : Scanner<'a>) -> Result<Tree,Error> {
         let (raw_code,mut raw_tokens) = scanner.explode();
 
@@ -113,12 +120,12 @@ impl<'a> Tree<'a> {
                     tier = 0;
                 }
 
-                if tier == 3 {
+                if tier == 1 {
                     // '-' and 'Not' should be done after checking for '-' and '+' binaries, 
                     // and then '-', '+', '*', and '/' should be done again. 
                     Unary::process_set(&mut line)?;
                     Binary::process_set_increment(&mut line,1)?;
-                    Binary::process_set_increment(&mut line,2)?;
+                    // Binary::process_set_increment(&mut line,2)?;
                 }
                 let new_tier = Binary::process_set_increment(&mut line,tier)?;
                 match new_tier {
@@ -129,20 +136,32 @@ impl<'a> Tree<'a> {
         }
 
         // now that everything is 'compressed', lets try and find some blocks
-        BlockIf::process(&mut self.tokens)?;
+        //BlockIf::process(&mut self.tokens)?;
         BlockRepeat::process(&mut self.tokens)?;
         BlockWhile::process(&mut self.tokens)?;
         BlockDo::process(&mut self.tokens)?;
 
-
-        for line in self.tokens.iter() {
-            println!("====");
-            for token in line.iter() {
-                println!("{}",token);
-            }
-        }
-
         Ok(self)
+    }
+
+    pub fn get_tokens(&'a self) -> &'a Vec<Chunk> {
+        &self.tokens
+    }
+}
+
+impl<'a> std::fmt::Debug for Tree<'a> {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut tokens = String::new();
+        for c in self.tokens.iter() {
+            tokens = format!("{}\n{:?}",tokens,c);
+        }
+        write!(f,"{}",tokens)
+    }
+}
+
+impl<'a> std::cmp::PartialEq for Tree<'a> {
+    fn eq(&self, other : &Tree) -> bool {
+        self.tokens == other.tokens
     }
 }
 

@@ -10,7 +10,7 @@
 
 use crate::grammar::gram::Gram;
 
-#[derive(PartialEq,Debug,Clone)]
+#[derive(Clone)]
 pub struct Chunk {
     elements : Vec<Gram>,
 }
@@ -56,6 +56,30 @@ impl Chunk {
 
     pub fn iter(&self) -> std::slice::Iter<Gram> {
         self.elements.iter()
+    }
+
+    pub fn get_grams<'a>(&'a self) -> &'a Vec<Gram> {
+        &self.elements
+    }
+}
+
+impl std::cmp::PartialEq for Chunk {
+    fn eq(&self, other : &Chunk) -> bool {
+        self.elements == other.elements
+    }
+}
+
+impl std::fmt::Debug for Chunk {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut elements = String::new();
+        for i in 0 .. self.elements.len() {
+            if i == 0 {
+                elements = format!("{:?}",self.elements[i]);
+            } else {
+                elements = format!("{},\n{:?}",elements,self.elements[i]);
+            }
+        }
+        write!(f,"C<{}>",elements)
     }
 }
 

@@ -1,7 +1,7 @@
 use crate::tokentype::TokenType;
 use crate::codeslice::CodeSlice;
 
-#[derive(Debug,Clone)]
+#[derive(Clone)]
 pub struct Token {
     token_type : TokenType,
     
@@ -81,6 +81,12 @@ impl Token {
 impl std::fmt::Display for Token {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f,"{}",self.token_type)
+    }
+}
+
+impl std::fmt::Debug for Token {
+    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"T<{}>",self.token_type)
     }
 }
 

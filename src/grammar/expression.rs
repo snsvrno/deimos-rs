@@ -2,7 +2,7 @@ use crate::tokentype::TokenType;
 use crate::token::Token;
 use crate::grammar::gram::Gram;
 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub struct Expression {
     token : Gram,
 }
@@ -30,6 +30,12 @@ impl Expression {
 impl std::fmt::Display for Expression {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f,"{}",self.token)
+    }
+}
+
+impl std::fmt::Debug for Expression {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"E<{:?}>",self.token)
     }
 }
 

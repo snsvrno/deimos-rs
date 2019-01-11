@@ -3,7 +3,7 @@ use crate::token::Token;
 use crate::tokentype::TokenType;
 
 // can be a number, string, bool, nil, 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub struct Literal {
     token : Token,
 }
@@ -33,6 +33,12 @@ impl Literal {
 impl std::fmt::Display for Literal {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f,"{}",self.token)
+    }
+}
+
+impl std::fmt::Debug for Literal {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"L<{:?}>",self.token)
     }
 }
 

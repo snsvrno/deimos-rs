@@ -5,7 +5,7 @@ use crate::grammar::gram::Gram;
 
 use failure::{Error,format_err};
 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub struct BlockDo {
     chunks : Vec<Chunk>
 }
@@ -15,6 +15,11 @@ impl BlockDo {
         let do_block = BlockDo { chunks };
         let gram  = Gram::BlockDo(Box::new(do_block));
         Chunk::wrap(gram)
+    }
+
+    pub fn create_into_gram(chunks : Vec<Chunk>) -> Gram {
+        let do_block = BlockDo { chunks };
+        Gram::BlockDo(Box::new(do_block))
     }
 
     pub fn process(raw_chunks : &mut Vec<Chunk>) -> Result<(),Error> {
@@ -90,5 +95,19 @@ impl std::fmt::Display for BlockDo {
             }
         }
         write!(f,"(do {} end)",statement)
+    }
+}
+
+impl std::fmt::Debug for BlockDo {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut elements = String::new();
+        for i in 0 .. self.chunks.len() {
+            if i == 0 {
+                elements = format!("{:?}",self.chunks[i]);
+            } else {
+                elements = format!("{},\n{:?}",elements,self.chunks[i]);
+            }
+        }
+        write!(f,"BD<{}>",elements)
     }
 }

@@ -119,29 +119,9 @@ impl<'a> Scanner<'a> {
 
         self.current_pos = working_pos;
 
-        let keyword : TokenType = match word.as_str() {
-            "and" => TokenType::And,
-            "break" => TokenType::Break,
-            "do" => TokenType::Do,
-            "else" => TokenType::Else,
-            "elseif" => TokenType::Elseif,
-            "end" => TokenType::End,
-            "false" => TokenType::False,
-            "for" => TokenType::For,
-            "function" => TokenType::Function,
-            "if" => TokenType::If,
-            "in" => TokenType::In,
-            "local" => TokenType::Local,
-            "nil" => TokenType::Nil,
-            "not" => TokenType::Not,
-            "or" => TokenType::Or,
-            "repeat" => TokenType::Repeat,
-            "return" => TokenType::Return,
-            "then" => TokenType::Then,
-            "true" => TokenType::True,
-            "until" => TokenType::Until,
-            "while" => TokenType::While,
-            word => TokenType::Identifier(word.to_string()),
+        let keyword : TokenType = match TokenType::match_keyword(word.as_str()) {
+            Some(token) => token,
+            None => TokenType::Identifier(word.to_string()),
         };
 
         Some(keyword)

@@ -7,7 +7,7 @@ use crate::grammar::expression::Expression;
 
 use failure::{Error,format_err};
 
-#[derive(PartialEq,Clone,Debug)]
+#[derive(PartialEq,Clone)]
 pub struct Binary {
     left_expr : Expression,
     operator : Token,
@@ -197,6 +197,12 @@ impl Binary {
 impl std::fmt::Display for Binary {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f,"({} {} {})",self.operator,self.left_expr,self.right_expr)
+    }
+}
+
+impl std::fmt::Debug for Binary {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"B<{:?},{:?},{:?}>",self.operator,self.left_expr,self.right_expr)
     }
 }
 
