@@ -9,6 +9,7 @@ struct IfBuilder {
     expression : Option<Chunk>,
     chunks : Option<Vec<Chunk>>,
     else_chunks : Option<Vec<Chunk>>,
+    elseif : Vec<BlockIf>,
 }
 
 impl IfBuilder {
@@ -17,6 +18,7 @@ impl IfBuilder {
             expression : None,
             chunks : None,
             else_chunks : None,
+            elseif : Vec::new(),
         }
     }
 
@@ -32,13 +34,21 @@ impl IfBuilder {
         self.else_chunks = Some(chunks);
     }
 
+    pub fn add_elseif(&mut self, block : BlockIf) {
+        self.elseif.push(block);
+    }
+
+    pub fn insert_elseif(&mut self, pos : usize, block : BlockIf) {
+        self.elseif.insert(pos,block);
+    }
+
     pub fn build(mut self) -> BlockIf {
 
         BlockIf {
             expression : self.expression.unwrap(),
             chunks : self.chunks.unwrap(),
             else_chunks : self.else_chunks,
-            else_if : None,
+            else_if : if self.elseif.len() > 0 { Some(self.elseif) } else { None },
         }
     }
 }
@@ -48,7 +58,7 @@ pub struct BlockIf {
     expression : Chunk,
     chunks : Vec<Chunk>,
     else_chunks : Option<Vec<Chunk>>,
-    else_if : Option<Box<BlockIf>>,
+    else_if : Option<Vec<BlockIf>>,
 }
 
 impl BlockIf {
@@ -97,20 +107,45 @@ impl BlockIf {
 
                 let mut builder = IfBuilder::new();
                 let mut toks : Vec<Chunk> = raw_chunks.drain(matches[0].1 .. matches[matches.len()-1].1 + 1).collect();
+                let mut then_stuff : Option<Vec<Chunk>> = None; 
 
                 for i in (0 .. matches.len() - 1).rev() {
                     match matches[i].0 {
                         TokenType::If => { 
                             let mut chunks : Vec<Chunk> = toks.drain(matches[i].1 - start + 1 .. matches[i+1].1 - start).collect();
                             builder.set_expression(chunks.remove(0));
+                            
+                            if let Some(then_chunks) = then_stuff {
+                                builder.set_chunks(then_chunks);
+                                then_stuff = None;
+                            }
                         },
                         TokenType::Then => {
                             let chunks : Vec<Chunk> = toks.drain(matches[i].1 - start + 1 .. matches[i+1].1 - start).collect();
-                            builder.set_chunks(chunks);
+                            then_stuff = Some(chunks);
                         },
                         TokenType::Else => {
                             let chunks : Vec<Chunk> = toks.drain(matches[i].1 - start + 1 .. matches[i+1].1 - start).collect();
                             builder.set_else_chunks(chunks);
+                        },
+                        TokenType::Elseif => {
+                            let mut chunks : Vec<Chunk> = toks.drain(matches[i].1 - start + 1 .. matches[i+1].1 - start).collect();
+                            
+                            match then_stuff {
+                                None => return Err(format_err!("Cannot have an elseif without a then: ")),
+                                Some(then_chunk) => {
+                                    let elseif_block = BlockIf {
+                                        expression : chunks.remove(0),
+                                        chunks : then_chunk,
+                                        else_chunks : None,
+                                        else_if : None,
+                                    };
+
+                                    then_stuff = None;
+
+                                    builder.insert_elseif(0, elseif_block);
+                                }
+                            }
                         },
                         _ => (),
                     }
@@ -133,42 +168,67 @@ impl BlockIf {
 
         Ok(())
     } 
+
+    fn format_statement(chunks : &Vec<Chunk>) -> String {
+        let mut statement : String = String::new();
+        if chunks.len() == 1 {
+            statement = format!("{}",chunks[0]);
+        } else {
+            for c in 0 .. chunks.len() {
+                if c == 0 {
+                    statement = format!("\n  {}\n",chunks[c]);
+                } else {
+                    statement = format!("  {}  {}\n",statement,chunks[c]);
+                }
+            }
+        }
+        statement
+    }
+
+    fn format_if(&self) -> String {
+        format!("{}",self.expression)
+    }
+
+    fn format_then(&self) -> String {
+        BlockIf::format_statement(&self.chunks)
+    }
+
+    fn format_else(&self) -> String {
+        match self.else_chunks {
+            Some(ref chunks) => format!(" else {}",BlockIf::format_statement(&chunks)),
+            None => format!(""),
+        } 
+    }
 }
 
 
 impl std::fmt::Display for BlockIf {
     fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
-        let mut statement : String = String::new();
-        if self.chunks.len() == 1 {
-            statement = format!("{}",self.chunks[0]);
-        } else {
-            for c in 0 .. self.chunks.len() {
-                if c == 0 {
-                    statement = format!("\n  {}\n",self.chunks[c]);
-                } else {
-                    statement = format!("  {}  {}\n",statement,self.chunks[c]);
+        match self.else_if {
+            None => write!(f,"(if {} then{}{} end)",
+                self.format_if(),
+                self.format_then(),
+                self.format_else()),
+                
+            Some(ref elseif) => {
+                let mut elseif_formatted = String::new();
+
+                for i in 0 .. elseif.len() {
+                    elseif_formatted = format!("{} elseif {} then {}",
+                        elseif_formatted,
+                        elseif[i].format_if(),
+                        elseif[i].format_then()
+                    )
                 }
+                
+                write!(f,"(if {} then{}{}{} end)",
+                    self.format_if(),
+                    self.format_then(),
+                    elseif_formatted,
+                    self.format_else())
+                
             }
         }
-
-        match self.else_chunks {
-            Some(ref chunks) => {
-                let mut else_statement : String = String::new();
-                if chunks.len() == 1 {
-                    else_statement = format!("{}",chunks[0]);
-                } else {
-                    for c in 0 .. chunks.len() {
-                        if c == 0 {
-                            else_statement = format!("\n  {}\n",chunks[c]);
-                        } else {
-                            else_statement = format!("  {}  {}\n",else_statement,chunks[c]);
-                        }
-                    }
-                }
-
-                write!(f,"(if {} then {}  else {} end)",self.expression,statement,else_statement)
-            },
-            None => write!(f,"(if {} then {} end)",self.expression,statement)
-        } 
+        
     }
 }
