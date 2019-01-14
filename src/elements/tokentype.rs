@@ -1,4 +1,4 @@
-#[derive(Debug,PartialEq,Clone)]
+#[derive(PartialEq,Debug)]
 pub enum TokenType {
     /// Tokens taken from the Lua [5.1 manual](https://www.lua.org/manual/5.1/manual.html#2.1)
 
@@ -69,6 +69,56 @@ pub enum TokenType {
 }
 
 impl TokenType {
+
+    pub fn valid_word_char(char : &str, first : bool) -> bool {
+        let allowable_ranges = vec![
+            // (u start, u end, can start)
+            (65,90,true), // A-Z
+            (97,122,true), // a-z
+            (48,57,false), // 0-9
+            (95,95,false) // _
+        ];
+
+        if char.len() == 1 {
+            if let Some(c) = char.chars().next(){
+                let code = c as u32;
+                for range in allowable_ranges {
+                    if range.0 <= code && code <= range.1 {
+                        if first && range.2 == false {
+                            return false;
+                        } else {
+                            return true
+                        }
+                    }
+                }
+            }
+        }
+        
+        false
+    }
+
+    pub fn valid_number_char(char : &str) -> bool {
+        let allowable_ranges = vec![
+            // (u start, u end, can start)
+            (48,57), // 0-9
+            (46,46), // .
+        ];
+
+        if char.len() == 1 {
+            if let Some(c) = char.chars().next(){
+                let code = c as u32;
+                for range in allowable_ranges {
+                    if range.0 <= code && code <= range.1 {
+                        return true;
+                    }
+                }
+            }
+        }
+        
+        false
+    }
+
+    #[cfg(test)]
     pub fn match_symbol(text : &str) -> Option<TokenType> {
         match text {
             "+" => Some(TokenType::Plus),
@@ -101,8 +151,8 @@ impl TokenType {
         }
     }
 
-    pub fn match_keyword(text : &str) -> Option<TokenType> {
-        match text {
+    pub fn match_keyword(word : &str) -> Option<TokenType> {
+        match word {
             "and" => Some(TokenType::And),
             "break" => Some(TokenType::Break),
             "do" => Some(TokenType::Do),
@@ -129,13 +179,41 @@ impl TokenType {
     }
 }
 
-impl std::fmt::Display for TokenType {
-    fn fmt(&self, f:&mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            TokenType::Identifier(text) => write!(f,"{}",text),
-            TokenType::String(text) => write!(f,"{}",text),
-            TokenType::Number(number) => write!(f,"{}",number),
-            _ => write!(f,"{:?}",self)
-        }
+mod tests {
+    
+    #[test]
+    fn  allowable_characters() {
+        use crate::elements::TokenType;
+
+        assert!(!TokenType::valid_word_char("_",true));
+
+        let letters = vec![
+            "Q","W","E","R","T","Y","U","I","O","P","L","K","J",
+            "H","G","F","D","S","A","Z","X","C","V","B","N","M",
+            "q","w","e","r","t","y","u","i","o","p","l","k","j",
+            "h","g","f","d","s","a","z","x","c","v","b","n","m"
+        ];
+
+        let symbols = vec![
+            "!","@","#","$","%","^","&","*","(",")","{","}","|",
+            ":","\"","<",">","?","-","=","+"
+        ];
+
+        let numbers = vec!["0","1","2","3","4","5","6","7","8","9","0"];
+        
+        for l in letters {
+            assert!(TokenType::valid_word_char(l,true));
+            assert!(TokenType::valid_word_char(l,false));
+        } 
+
+        for s in symbols {
+            assert!(!TokenType::valid_word_char(s,true));
+            assert!(!TokenType::valid_word_char(s,false));
+        } 
+
+        for n in numbers {
+            assert!(!TokenType::valid_word_char(n,true));
+            assert!(TokenType::valid_word_char(n,false));
+        } 
     }
 }

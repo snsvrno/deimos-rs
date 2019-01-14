@@ -1,71 +1,65 @@
-use crate::token::Token;
-use crate::tokentype::TokenType;
-use crate::codeslice::CodeSlice;
+use failure::{format_err,Error};
 
-use failure::{Error,format_err};
+use crate::elements::{ Token, TokenType, CodeSlice };
 
-/// scanner that converts raw source code into 
-/// tokens
 pub struct Scanner<'a> {
     raw_code : &'a str,
-
     tokens : Vec<Token>,
 
+    // for processing, unimportant otherwise
     start_pos : usize,
     current_line : usize,
     current_line_pos : usize,
     current_pos : usize,
 }
 
-impl<'a> Scanner<'a> {
-    pub fn new(code : &'a str) -> Scanner<'a> {
-        //! creates a new scanner object from a &str of code
-        
+impl<'a> std::default::Default for Scanner<'a> {
+    fn default() -> Scanner<'a> {
         Scanner {
-            raw_code : code,
-
+            raw_code : "",
             tokens : Vec::new(),
-
             start_pos : 0,
             current_line : 1,
             current_line_pos : 0,
             current_pos : 0,
         }
     }
+}
+
+impl<'a> Scanner <'a> {
+
+    //////////////////////////////////////////////////////////////////////////////////
+    // building functions
+
+    pub fn init(code : &'a str) -> Scanner<'a> {
+        Scanner {
+            raw_code : code,
+            .. Scanner::default()
+        }
+    }
+
+    //////////////////////////////////////////////////////////////////////////////////
+    // public functions
 
     pub fn scan(mut self) -> Result<Self,Error> {
-        //! runs the scan, and returns itself. used as a chained
-        //! operator after creating a new scanner so mut isn't needed.
-        //! 
-        //! ```rust,ignore
-        //! # extern crate lua_interpreter;
-        //! # use lua_interpreter::scanner::Scanner;
-        //! // prefered to use .scan()? to pass the error onward, or you can use match
-        //! // to capture the error and repeat it.
-        //! let scanner = Scanner::new("some code").scan().expect("scanner failed");
-        //! ```
-        //! 
-        //! Errors from `scan()` will be lexiconical errors from bad lua code.
-
+        
         loop {
+            
             let token = self.next_token()?;
 
-            // println!("{:?}",token);
-
-            if token == TokenType::EOL { 
-                self.current_line += 1;
-                self.current_line_pos = self.current_pos;
+            match token.get_type() {
+                TokenType::EOF => break,
+                TokenType::EOL => { 
+                    self.current_line += 1;
+                    self.current_line_pos = self.current_pos;
+                },
+                _ => (),
             }
-            if token == TokenType::EOF { break; }
 
             self.tokens.push(token);
         }
 
         Ok(self)
-    }
-    
-    pub fn explode(self) -> (&'a str, Vec<Token>) {
-        (self.raw_code,self.tokens)
     }
 
     //////////////////////////////////////////////////////////////////////////////////
@@ -100,14 +94,14 @@ impl<'a> Scanner<'a> {
         let mut working_pos = self.current_pos;
         let mut word : String = starter.to_string();
 
-        if !Token::valid_word_char(starter,true) { return None; }
+        if !TokenType::valid_word_char(starter,true) { return None; }
 
         loop {
             if working_pos == self.raw_code.len() { break; }
 
             let n_char = &self.raw_code[working_pos .. working_pos + 1];
 
-            match Token::valid_word_char(n_char,false) {
+            match TokenType::valid_word_char(n_char,false) {
                 false => break,
                 true => {
                     // adds the character to the working word
@@ -119,9 +113,9 @@ impl<'a> Scanner<'a> {
 
         self.current_pos = working_pos;
 
-        let keyword : TokenType = match TokenType::match_keyword(word.as_str()) {
-            Some(token) => token,
-            None => TokenType::Identifier(word.to_string()),
+        let keyword : TokenType = match TokenType::match_keyword(&word) {
+            Some(t) => t,
+            None => TokenType::Identifier(word.to_string())
         };
 
         Some(keyword)
@@ -135,7 +129,7 @@ impl<'a> Scanner<'a> {
         let mut number : String = starter.to_string();
         let mut decimal_count = if starter == "." { 1 } else { 0 };
 
-        if !Token::valid_number_char(&number) { return None; }
+        if !TokenType::valid_number_char(&number) { return None; }
 
         loop {
             if working_pos == self.raw_code.len() { break; }
@@ -143,7 +137,7 @@ impl<'a> Scanner<'a> {
             let n_char = &self.raw_code[working_pos .. working_pos + 1];
             if n_char == "." { decimal_count += 1; }
 
-            match Token::valid_number_char(n_char) {
+            match TokenType::valid_number_char(n_char) {
                 false => break,
                 true => {
                     // adds the character to the working word
@@ -192,13 +186,12 @@ impl<'a> Scanner<'a> {
     }
 
     fn next_token(&mut self) -> Result<Token,Error> {
-        //! gets the next token in the series, used internally
-        
         // at the end of the file / code string
         if self.current_pos == self.raw_code.len() {
-            return Ok(Token::simple(TokenType::EOF));
+            let code_slice = CodeSlice::new(self.start_pos,self.current_pos,self.current_line,self.current_line_pos);
+            return Ok(Token::new(TokenType::EOF,code_slice));
         }
-        
+
         // gets the slice of the next char
         let char = &self.raw_code[self.current_pos .. self.current_pos + 1];
         self.start_pos = self.current_pos;
@@ -242,147 +235,81 @@ impl<'a> Scanner<'a> {
                 },
             },
         };
-
+        
         let mut sending_token = Token::new(
             token,
             CodeSlice::new(self.start_pos,self.current_pos,self.current_line,self.current_line_pos)
         );
 
-        while sending_token == TokenType::WhiteSpace {
+        while sending_token.get_type() == &TokenType::WhiteSpace {
             sending_token = self.next_token()?;
         }
 
         Ok(sending_token)
     }
+
+    //////////////////////////////////////////////////////////////////////////////////
+    // access functions
+    pub fn code(&self) -> &str {
+        self.raw_code
+    }
 }
 
-//////////////////////////////////////////////////////////////////////////////////
-// TESTING MACROS ///////////////////////////////
-
-#[macro_export]
-macro_rules! assert_scanner {
-    ($scanner:expr,$($checker:expr),*) => {
-        match $scanner.scan() {
-            Err(error) => panic!("\n{}",error),
-            Ok(scanner) => {
-                let vec = vec![$($checker),*];
-                let length = vec.len();
-
-                if length != scanner.tokens.len() {
-                    panic!("\n\nCode Segment:\n{}\n\nNumber of Tokens ({}) doesn't match number of Checkers ({}) provided. \n  Tokens : {:?} \n  Checkers : {:?}",
-                        scanner.raw_code,
-                        scanner.tokens.len(),
-                        length,
-                        scanner.tokens,
-                        vec
-                    );
-                }
-
-                for i in 0 .. length {
-                    if scanner.tokens[i] != vec[i] {
-                        panic!("\n\nCode Segment:\n{}\n\nToken #{} doesn't match.\n  Result: {:?}\n  Expected: {:?}",
-                            scanner.raw_code,
-                            i,
-                            scanner.tokens[i].get_type(),
-                            vec[i]
-                        );
-                    }
-                }
-            }
-        }
-    };
-}
-
-mod tests {
+mod test {
 
     #[test]
-    pub fn basic_token_matching() {
-        //! tests the token scanning, making sure if we pass a string of the 
-        //! exact token it will correctly identify which token we want.
-        
+    fn simple_scan() {
         use crate::scanner::Scanner;
-        use crate::tokentype::TokenType;
+        
+        let scanner = Scanner::init("5+5").scan().unwrap();
+        assert_eq!(scanner.tokens,vec![
+            token!("5"),token!("+"),token!("5")
+        ]);
 
-        //////////////////////////////////////////////////////////////
-        // +     -     *     /     %     ^     #
-        assert_scanner!(Scanner::new("+"),TokenType::Plus);
-        assert_scanner!(Scanner::new("-"),TokenType::Minus);
-        assert_scanner!(Scanner::new("*"),TokenType::Star);
-        assert_scanner!(Scanner::new("/"),TokenType::Slash);
-        assert_scanner!(Scanner::new("%"),TokenType::Percent);
-        assert_scanner!(Scanner::new("^"),TokenType::Carrot);
-        assert_scanner!(Scanner::new("#"),TokenType::Pound);
-        // ==    ~=    <=    >=    <     >     =
-        assert_scanner!(Scanner::new("=="),TokenType::EqualEqual);
-        assert_scanner!(Scanner::new("~="),TokenType::NotEqual);
-        assert_scanner!(Scanner::new("<="),TokenType::LessEqual);
-        assert_scanner!(Scanner::new(">="),TokenType::GreaterEqual);
-        assert_scanner!(Scanner::new("<"),TokenType::LessThan);
-        assert_scanner!(Scanner::new(">"),TokenType::GreaterThan);
-        assert_scanner!(Scanner::new("="),TokenType::Equal);
-        // (     )     {     }     [     ]
-        assert_scanner!(Scanner::new("("),TokenType::LeftParen);
-        assert_scanner!(Scanner::new(")"),TokenType::RightParen);
-        assert_scanner!(Scanner::new("{"),TokenType::LeftMoustache);
-        assert_scanner!(Scanner::new("}"),TokenType::RightMoustache);
-        assert_scanner!(Scanner::new("["),TokenType::LeftBracket);
-        assert_scanner!(Scanner::new("]"),TokenType::RightBracket);
-        // ;     :     ,     .     ..    ...
-        assert_scanner!(Scanner::new(";"),TokenType::SemiColon);
-        assert_scanner!(Scanner::new(":"),TokenType::Colon);
-        assert_scanner!(Scanner::new(","),TokenType::Comma);
-        assert_scanner!(Scanner::new("."),TokenType::Period);
-        assert_scanner!(Scanner::new(".."),TokenType::DoublePeriod);
-        assert_scanner!(Scanner::new("..."),TokenType::TriplePeriod);
- 
-        //////////////////////////////////////////////////////////////       
-        // and       break     do        else      elseif
-        assert_scanner!(Scanner::new("and"),TokenType::And);
-        assert_scanner!(Scanner::new("break"),TokenType::Break);
-        assert_scanner!(Scanner::new("do"),TokenType::Do);
-        assert_scanner!(Scanner::new("else"),TokenType::Else);
-        assert_scanner!(Scanner::new("elseif"),TokenType::Elseif);
-        // end       false     for       function  if
-        assert_scanner!(Scanner::new("end"),TokenType::End);
-        assert_scanner!(Scanner::new("false"),TokenType::False);
-        assert_scanner!(Scanner::new("for"),TokenType::For);
-        assert_scanner!(Scanner::new("function"),TokenType::Function);
-        assert_scanner!(Scanner::new("if"),TokenType::If);
-        // in        local     nil       not       or
-        assert_scanner!(Scanner::new("in"),TokenType::In);
-        assert_scanner!(Scanner::new("local"),TokenType::Local);
-        assert_scanner!(Scanner::new("nil"),TokenType::Nil);
-        assert_scanner!(Scanner::new("not"),TokenType::Not);
-        assert_scanner!(Scanner::new("or"),TokenType::Or);
-        // repeat    return    then      true      until     while
-        assert_scanner!(Scanner::new("repeat"),TokenType::Repeat);
-        assert_scanner!(Scanner::new("return"),TokenType::Return);
-        assert_scanner!(Scanner::new("then"),TokenType::Then);
-        assert_scanner!(Scanner::new("true"),TokenType::True);
-        assert_scanner!(Scanner::new("until"),TokenType::Until);
-        assert_scanner!(Scanner::new("while"),TokenType::While);
+        assert_eq!("5",scanner.tokens[0].slice_code(&scanner.raw_code));
+        assert_eq!("+",scanner.tokens[1].slice_code(&scanner.raw_code));
+        assert_eq!("5",scanner.tokens[2].slice_code(&scanner.raw_code));
 
-        //////////////////////////////////////////////////////////////
-        // strings
-        assert_scanner!(Scanner::new("\"ashortstring\""),TokenType::String("".to_string()));
-        assert_scanner!(Scanner::new("\"a longer string\""),TokenType::String("".to_string()));
-
-        //////////////////////////////////////////////////////////////
-        // numbers
-        assert_scanner!(Scanner::new("123"),TokenType::Number(123 as f32));
-        assert_scanner!(Scanner::new("0.123"),TokenType::Number(0.123));
-        assert_scanner!(Scanner::new(".123"),TokenType::Period,TokenType::Number(123 as f32));
-        assert_scanner!(Scanner::new("1.23"),TokenType::Number(1.23));
-        assert_scanner!(Scanner::new("123."),TokenType::Number(123 as f32));
-
-        //////////////////////////////////////////////////////////////
-        // variable names (assignment)
-        assert_scanner!(Scanner::new("local bob = 23"),
-            TokenType::Local,
-            TokenType::Identifier("bob".to_string()),
-            TokenType::Equal,
-            TokenType::Number(23 as f32)
-        );
+        assert_eq!(scanner.tokens.len(),3);
     }
 
+        #[test]
+    fn complex_scan() {
+        use crate::scanner::Scanner;
+        
+        let scanner = Scanner::init(r"
+        local bob = 23;
+        bob = bob + 4;
+        do
+            bob = bob + 1
+        end
+
+        if bob >= 10 then
+            bob = -1233
+        end
+        ").scan().unwrap();
+        
+        // scanner doesn't know what to with ';' or '\n' so
+        // it includes them all, the parser will process and 
+        // remove them. the scanner does ignore whitespace.
+        let token_stream = vec!["\n",
+            "local","bob","=","23",";","\n",
+            "bob","=","bob","+","4",";","\n",
+            "do","\n",
+            "bob","=","bob","+","1","\n",
+            "end","\n","\n",
+            "if","bob",">=","10","then","\n",
+            "bob","=","-","1233","\n",
+            "end","\n"
+        ];
+
+
+        for i in 0 .. token_stream.len() {
+            assert_eq!(token_stream[i],scanner.tokens[i].slice_code(&scanner.raw_code));
+            assert_eq!(token!(token_stream[i]),scanner.tokens[i])
+        }
+        assert_eq!(token_stream.len(),scanner.tokens.len());
+
+        //assert_eq!(scanner.tokens.len(),3);
+    }
 }

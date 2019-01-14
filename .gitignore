@@ -1,3 +1,12 @@
+# cargo standard
 /target
 **/*.rs.bk
 Cargo.lock
+
+# working files, alterante versons
+/_*
+
+# comments / notes logs
+/NOTES.md
+/CHANGES.md
+/TODO.md

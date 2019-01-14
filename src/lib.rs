@@ -1,15 +1,29 @@
 use failure::Error;
 
-#[macro_use] pub mod grammar;
-pub mod token;
-pub mod tokentype;
-mod codeslice;
-pub mod chunk;
-mod scanner; use crate::scanner::Scanner;
-pub mod tree; use crate::tree::Tree;
+mod elements;
 
-pub fn parse(code : &str) -> Result<Tree,Error> {
-    let scanner = Scanner::new(code).scan()?;
-    let tree = Tree::from_scanner(scanner)?.create_tree()?;
-    Ok(tree)
+#[cfg(test)]
+#[macro_use] 
+mod test_macros;
+
+mod scanner; pub use crate::scanner::Scanner;
+
+pub fn scan(code : &str) -> Result<Scanner,Error> {
+    let scanner = Scanner::init(code).scan()?;
+    Ok(scanner)
+}
+
+mod tests {
+
+    #[test]
+    fn create_scanner() {
+        let code = "5+5";
+
+        match crate::scan(&code) {
+            Err(error) => panic!("{}",error),
+            Ok(scanner) => {
+                assert_eq!(scanner.code(),code);
+            }
+        }
+    }
 }
