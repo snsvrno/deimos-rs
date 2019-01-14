@@ -158,6 +158,64 @@ impl<'a> Scanner <'a> {
         }
     }
 
+    fn peek_comment(&mut self) -> Result<TokenType,Error> {
+
+        let mut string_stream = String::new();
+        let mut working_pos = self.current_pos;
+
+        if self.peek("[[") {
+            // a multi-line'd comment.
+
+            // need to do this because when you peek and it matches
+            // it will "consume" those tokens, so the global position now
+            // has moved 2 characters to the right, but my local one (working_pos)
+            // is locked before the peek.
+            working_pos = self.current_pos;
+            
+            loop {
+                // checks if we reach the end without finding the end comment
+                if working_pos == self.raw_code.len() {
+                    return Err(format_err!("Unterminated comment block, starting at :"));
+                }
+
+                let n_char = &self.raw_code[working_pos .. working_pos + 1];
+                working_pos += 1;
+
+                // end of the comment
+                if n_char == "]" { 
+                    if &self.raw_code[working_pos .. working_pos + 1] == "]" {
+                        working_pos +=1;
+                        break;
+                    }
+                } else {
+                    string_stream = format!("{}{}",string_stream,n_char);
+                }
+            }
+        } else {
+
+            // a single line comment, ends with the line
+            loop {
+                if working_pos == self.raw_code.len() {
+                    // the comment is on the last line, weird but ok. is it weird? IDK i don't do this.
+                    break;
+                }
+
+                let n_char = &self.raw_code[working_pos .. working_pos + 1];
+
+                if n_char == "\n" || n_char == "\r" {
+                    // don't want to consume the new line.
+                    break;
+                } else {
+                    working_pos += 1;
+                    string_stream = format!("{}{}",string_stream,n_char);
+                }
+            }
+        }
+        
+        self.current_pos = working_pos;
+        Ok(TokenType::Comment(string_stream))
+    }
+
     fn peek_string(&mut self, starter : &str) -> Result<TokenType,Error> {
         //! peek variant designed to match against strings
         //! doesn't edit self unless it finds a match
@@ -199,7 +257,7 @@ impl<'a> Scanner <'a> {
 
         let token = match char {
             "+" => TokenType::Plus,
-            "-" => TokenType::Minus,
+            "-" => if self.peek("-") { self.peek_comment()? } else { TokenType::Minus },
             "*" => TokenType::Star,
             "/" => TokenType::Slash,
             "%" => TokenType::Percent,
@@ -273,7 +331,32 @@ mod test {
         assert_eq!(scanner.tokens.len(),3);
     }
 
-        #[test]
+    #[test]
+    fn comments() {
+        use crate::scanner::Scanner;
+
+        let scanner = Scanner::init("--what is this going to do?
+        -- this is another comment
+        local bob = 12 + 2 -- some comment here
+        
+        --[[ mutli line comment
+        with some stuf here
+        local linda = 12+4
+        while lind > 10 do
+            linda = linda - 1
+        end
+        ]]
+        
+        jim = (12 * 3) + -34").scan().unwrap();
+
+        assert_eq!(scanner.tokens.len(), 26);
+        assert!(scanner.tokens[0] == comment_tt!(""));
+        assert!(scanner.tokens[2] == comment_tt!(""));
+        assert!(scanner.tokens[10] == comment_tt!(""));
+        assert!(scanner.tokens[13] == comment_tt!(""));
+    }
+
+    #[test]
     fn complex_scan() {
         use crate::scanner::Scanner;
         

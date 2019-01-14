@@ -62,6 +62,7 @@ pub enum TokenType {
     String(String),
     Number(f32),
 
+    Comment(String),
     WhiteSpace,
     EOL,
     EOF,

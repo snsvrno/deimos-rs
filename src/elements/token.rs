@@ -39,7 +39,19 @@ impl PartialEq for Token {
         match (&self.token_type,&other.token_type) {
             (TokenType::String(sa), TokenType::String(sb)) => sa == sb,
             (TokenType::Number(na), TokenType::Number(nb)) => na == nb,
+            (TokenType::Comment(ca), TokenType::Comment(cb)) => ca == cb,
             (_, _) => self.get_type() == other.get_type() 
+        }
+    }
+}
+
+impl PartialEq<TokenType> for Token {
+    fn eq(&self, other: &TokenType) -> bool {
+        match (&self.token_type,other) {
+            (TokenType::String(_), TokenType::String(_)) => true,
+            (TokenType::Number(_), TokenType::Number(_)) => true,
+            (TokenType::Comment(_), TokenType::Comment(_)) => true,
+            (_, _) => self.get_type() == other,
         }
     }
 }
