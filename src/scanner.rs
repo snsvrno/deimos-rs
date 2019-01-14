@@ -62,6 +62,10 @@ impl<'a> Scanner <'a> {
         Ok(self)
     }
 
+    pub fn disassemble(self) -> (&'a str, Vec<Token>) {
+        (self.raw_code,self.tokens)
+    }
+
     //////////////////////////////////////////////////////////////////////////////////
     /// INTERNAL PRIVATE FUNCTIONS /////////////////////////////////////
 

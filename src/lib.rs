@@ -6,7 +6,8 @@ mod elements;
 #[macro_use] 
 mod test_macros;
 
-mod scanner; pub use crate::scanner::Scanner;
+mod scanner; use crate::scanner::Scanner;
+mod parser; use crate::parser::Parser;
 
 pub fn scan(code : &str) -> Result<Scanner,Error> {
     let scanner = Scanner::init(code).scan()?;

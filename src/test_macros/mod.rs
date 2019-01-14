@@ -1,5 +1,8 @@
 #[macro_use] mod token;
 pub use crate::test_macros::token::*;
 
-#[macro_use] mod comment;
-pub use crate::test_macros::comment::*;
+#[macro_use] mod statements;
+pub use crate::test_macros::statements::*;
+
+#[macro_use] mod chunk;
+pub use crate::test_macros::chunk::*;
