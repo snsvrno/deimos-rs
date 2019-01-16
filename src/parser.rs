@@ -66,12 +66,13 @@ impl<'a> Parser<'a> {
 
         loop {
             // already a single statement, stop the loop
-            if statement.len() <= 1 || statement.len() < pos { break; }
+            if statement.len() <= 1 || statement.len() <= pos { break; }
 
             // checks if current statement is an unary operator, so it can then
             // check if we can make a unary grouping
             if statement[pos].is_unop() {
-                if Parser::peek_expr(pos+1,&statement) {
+                println!("Found u {}",statement[pos]);
+                if Parser::peek_expr_after(pos,&statement) && !Parser::peek_expr_before(pos,&statement) {
                     let expr = statement.remove(pos+1);
                     let op = statement.remove(pos);
 
@@ -84,17 +85,16 @@ impl<'a> Parser<'a> {
 
             // checks if current statement is a binary operator
             if statement[pos].is_binop() {
-                if pos > 0 {
-                    if Parser::peek_expr(pos-1,&statement) && Parser::peek_expr(pos+1,&statement) {
-                        let expr2 = statement.remove(pos+1);
-                        let op = statement.remove(pos);
-                        let expr1 = statement.remove(pos-1);
+                println!("Found b {}",statement[pos]);
+                if Parser::peek_expr_before(pos,&statement) && Parser::peek_expr_after(pos,&statement) {
+                    let expr2 = statement.remove(pos+1);
+                    let op = statement.remove(pos);
+                    let expr1 = statement.remove(pos-1);
                         
-                        statement.insert(pos-1,op.into_binary(expr1,expr2));
+                    statement.insert(pos-1,op.into_binary(expr1,expr2));
 
-                        pos = 0;
-                        continue;
-                    }
+                    pos = 0;
+                    continue;
                 }
             }
             
@@ -107,9 +107,14 @@ impl<'a> Parser<'a> {
         statement.remove(0)
     }
 
-    fn peek_expr(pos : usize,statement : &Vec<Statement>) -> bool {
-        if statement.len() < pos { return false; }
-        statement[pos].is_expr()
+    fn peek_expr_before(pos : usize,statement : &Vec<Statement>) -> bool {
+        if statement.len() < pos || pos == 0 { return false; }
+        statement[pos-1].is_expr()
+    }
+
+    fn peek_expr_after(pos : usize,statement : &Vec<Statement>) -> bool {
+        if statement.len() < (pos+1) { return false; }
+        statement[pos+1].is_expr()
     }
 
 }
@@ -125,7 +130,7 @@ mod tests {
         let parser = Parser::from_scanner(scanner).unwrap();
 
         assert_eq!(1,parser.chunks.len());
-        assert_eq!(chunk!(unary!("-","5")),parser.chunks[0]);
+        assert_eq!(chunk!(unary!("-","5")), parser.chunks[0]);
     }
 
     #[test]
@@ -133,6 +138,11 @@ mod tests {
         let parser = setup_simple!("5+4");
 
         assert_eq!(1,parser.chunks.len());
-        assert_eq!(chunk!(binary!("+","5","4")),parser.chunks[0]);
+        assert_eq!(chunk!(binary!("+","5","4")), parser.chunks[0]);
+    
+        let parser2 = setup_simple!("5+4-3");
+
+        assert_eq!(1,parser.chunks.len());
+        assert_eq!(chunk!(binary!("-",s binary!("+","5","4"),"3")), parser2.chunks[0]);
     }
 }

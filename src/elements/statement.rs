@@ -79,6 +79,8 @@ impl Statement {
                 TokenType::String(_) => true,
                 _ => false,
             },
+            Statement::Binary(_,_,_) |
+            Statement::Unary(_,_) => true,
             _ => false,
         }
     }
@@ -104,5 +106,15 @@ impl Statement {
             _ => panic!("Cannot make {:?} into binary, not an operator.", self),
         }
 
+    }
+}
+
+impl std::fmt::Display for Statement {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Statement::Token(token) => write!(f,"{}",token),
+            Statement::Unary(op,expr) => write!(f,"({} {})",op,expr),
+            Statement::Binary(op,e1,e2) => write!(f,"({} {} {})",op,e1,e2),
+        }
     }
 }

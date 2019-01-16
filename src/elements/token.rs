@@ -55,3 +55,9 @@ impl PartialEq<TokenType> for Token {
         }
     }
 }
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f,"{:?}",self.token_type)
+    }
+}

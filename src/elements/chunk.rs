@@ -10,3 +10,13 @@ impl Chunk {
         Chunk { statements }
     }
 }
+
+impl std::fmt::Display for Chunk {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        for statement in self.statements.iter() {
+            write!(f,"{}\n",statement)?;
+        }
+
+        Ok(())
+    }
+}
