@@ -6,3 +6,6 @@ pub use crate::test_macros::statements::*;
 
 #[macro_use] mod chunk;
 pub use crate::test_macros::chunk::*;
+
+#[macro_use] mod setup;
+pub use crate::test_macros::setup::*;

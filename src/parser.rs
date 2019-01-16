@@ -15,20 +15,23 @@ impl<'a> Parser<'a> {
         /// creates a completed parser from a scanner, this means all the tokens
         /// are grouped and organized into chunks and ready to execute, or process
         
-        // prepares the scanner parts
         let (raw_code, tokens) = scanner.disassemble();
+        // converts the vec<Token> to a vec<Statement> for processessing
         let mut raw_statements = Statement::tokens_to_statements(tokens);
 
-        // working parts
         let mut chunks : Vec<Chunk> = Vec::new();
+        // the group of statements that will become the 'chunks'
         let mut working_statements : Vec<Statement> = Vec::new();
+        // the current statement, starts off as a vec<Statement> of all the tokens and is gradually
+        // compressed down to a single statement
         let mut statement : Vec<Statement> = Vec::new();
 
         loop {
 
             if raw_statements.len() <= 0 { 
                 if statement.len() > 0 {
-                    working_statements.push(Parser::collapse_statement(statement)); // crunch the last one
+                    // crunch the last one, if still exists
+                    working_statements.push(Parser::collapse_statement(statement));
                     chunks.push(Chunk::new(working_statements));
                 }
                 break; 
@@ -53,38 +56,68 @@ impl<'a> Parser<'a> {
     }
 
     fn collapse_statement(mut statement : Vec<Statement>) -> Statement {
-        
-        loop {
-            if statement.len() <= 1 { break; }
+        /// takes a list of Statements that can be collapsed down to a new statement.
+        /// primarily used for taking a list of Tokens and making a single statement
+        /// from them
+        ///
+        ///     vec<"5","+","3","*","3" => binary("+","5",binary("*","3","3"))
 
-            let current = statement.remove(0);
-            
-            if current.is_unop() {
-                if let Some(expr) = Parser::peek_expr(&mut statement) {
-                    statement.insert(0,current.into_unary(expr));
+        let mut pos = 0;
+
+        loop {
+            // already a single statement, stop the loop
+            if statement.len() <= 1 || statement.len() < pos { break; }
+
+            // checks if current statement is an unary operator, so it can then
+            // check if we can make a unary grouping
+            if statement[pos].is_unop() {
+                if Parser::peek_expr(pos+1,&statement) {
+                    let expr = statement.remove(pos+1);
+                    let op = statement.remove(pos);
+
+                    statement.insert(pos,op.into_unary(expr));
+
+                    pos = 0;
+                    continue;
+                }
+            }
+
+            // checks if current statement is a binary operator
+            if statement[pos].is_binop() {
+                if pos > 0 {
+                    if Parser::peek_expr(pos-1,&statement) && Parser::peek_expr(pos+1,&statement) {
+                        let expr2 = statement.remove(pos+1);
+                        let op = statement.remove(pos);
+                        let expr1 = statement.remove(pos-1);
+                        
+                        statement.insert(pos-1,op.into_binary(expr1,expr2));
+
+                        pos = 0;
+                        continue;
+                    }
                 }
             }
             
+
+            pos += 1;
         }
+
+        // removes the first element of the list of statements,
+        // will panic tread if there is nothing in the statement
         statement.remove(0)
     }
 
-    fn peek_expr(statement : &mut Vec<Statement>) -> Option<Statement> {
-        if statement.len() <= 0 { return None; }
-
-        match statement[0].is_expr() {
-            true => Some(statement.remove(0)),
-            false => None,
-        }
+    fn peek_expr(pos : usize,statement : &Vec<Statement>) -> bool {
+        if statement.len() < pos { return false; }
+        statement[pos].is_expr()
     }
-
 
 }
 
 mod tests {
 
     #[test]
-    fn simpe() {
+    fn simple_unary() {
         use crate::scanner::Scanner;
         use crate::parser::Parser;
 
@@ -93,5 +126,13 @@ mod tests {
 
         assert_eq!(1,parser.chunks.len());
         assert_eq!(chunk!(unary!("-","5")),parser.chunks[0]);
+    }
+
+    #[test]
+    fn simple_binary() {
+        let parser = setup_simple!("5+4");
+
+        assert_eq!(1,parser.chunks.len());
+        assert_eq!(chunk!(binary!("+","5","4")),parser.chunks[0]);
     }
 }
