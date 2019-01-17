@@ -178,6 +178,43 @@ impl TokenType {
             _ => None,
         }
     }
+
+    pub fn oop(&self) -> usize {
+        match self {
+            TokenType::Carrot => 1,
+            TokenType::Star |
+            TokenType::Slash => 2,
+            TokenType::Plus |
+            TokenType::Minus => 3,
+            TokenType::DoublePeriod =>4,
+            TokenType::LessThan |            
+            TokenType::LessEqual |
+            TokenType::GreaterThan |
+            TokenType::GreaterEqual |
+            TokenType::NotEqual |
+            TokenType::EqualEqual => 5,
+            TokenType::And => 6,
+            TokenType::Or => 7,
+            _ => 0,
+        }
+    }
+
+    pub fn oop_binary(t1 : &TokenType, t2 : &TokenType) -> bool {
+        //! going to assume that both tokens are of type binary, since
+        //! this should only be called when comparing two binaries.
+        
+        // ungraceful panic.
+        if t1.oop() == 0 || t2.oop() == 0 {
+            panic!("One of these isn't a binary operator!! {:?} or {:?} ?",t1,t2);
+        }
+
+        // checks if t1's tier is lower than t2 (meaning higher priority). If
+        // they are the same tier then still returns false because this used
+        // when creating binaries and is read left to right, which is the order
+        // of precidence, so if they are the same tier than their are already
+        // assembled correctly.
+        t1.oop() < t2.oop()
+    }
 }
 
 mod tests {

@@ -102,10 +102,34 @@ impl Statement {
         if !expr2.is_expr() { panic!("Cannot make binary, expr2 {:?} isn't an expression.", expr2); }
 
         match self {
-            Statement::Token(token) => Statement::Binary(token, Box::new(expr1), Box::new(expr2)),
+            Statement::Token(token) => { 
+                // need to check if we have another binary that resolved too soon,
+                // basically we are checking the order of operation here.
+                
+                if let Statement::Binary(ref op,_,_) = expr1 {
+                    if TokenType::oop_binary(&token.get_type(),&op.get_type()) {
+                        let (op,n_expr1,n_expr2) = expr1.explode_binary();
+                        let inner = Statement::Binary(token,Box::new(n_expr2),Box::new(expr2));
+                        let outer = Statement::Binary(op,Box::new(n_expr1),Box::new(inner));
+                        return outer;
+                    }
+                }
+                
+                Statement::Binary(token, Box::new(expr1), Box::new(expr2))
+            },
             _ => panic!("Cannot make {:?} into binary, not an operator.", self),
         }
 
+    }
+
+    pub fn explode_binary(self) -> (Token,Statement,Statement) {
+        match self {
+            Statement::Binary(op,ex1,ex2) => {
+                return (op,*ex1,*ex2);
+            },
+            _ => panic!("Exploding {:?} as a binary isn't allowed, not a binary.",self),
+
+        }
     }
 }
 

@@ -71,7 +71,6 @@ impl<'a> Parser<'a> {
             // checks if current statement is an unary operator, so it can then
             // check if we can make a unary grouping
             if statement[pos].is_unop() {
-                println!("Found u {}",statement[pos]);
                 if Parser::peek_expr_after(pos,&statement) && !Parser::peek_expr_before(pos,&statement) {
                     let expr = statement.remove(pos+1);
                     let op = statement.remove(pos);
@@ -85,7 +84,6 @@ impl<'a> Parser<'a> {
 
             // checks if current statement is a binary operator
             if statement[pos].is_binop() {
-                println!("Found b {}",statement[pos]);
                 if Parser::peek_expr_before(pos,&statement) && Parser::peek_expr_after(pos,&statement) {
                     let expr2 = statement.remove(pos+1);
                     let op = statement.remove(pos);
@@ -144,5 +142,10 @@ mod tests {
 
         assert_eq!(1,parser.chunks.len());
         assert_eq!(chunk!(binary!("-",s binary!("+","5","4"),"3")), parser2.chunks[0]);
+
+        let parser3 = setup_simple!("5+4*3");
+
+        assert_eq!(1,parser.chunks.len());
+        assert_eq!(chunk!(binary!("+","5",s binary!("*","4","3"))), parser3.chunks[0]);
     }
 }

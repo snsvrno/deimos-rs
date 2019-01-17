@@ -24,4 +24,19 @@ macro_rules! binary {
 
         top.into_binary($t1,tt2)
     });
+
+    ($op:expr,$t1:expr,s $t2:expr) => ({
+        let top = crate::elements::Statement::Token(token!($op));
+        let tt1 = crate::elements::Statement::Token(token!($t1));
+
+        top.into_binary(tt1,$t2)
+    });
+
+    ($op:expr,s $t1:expr,s $t2:expr) => ({
+        let top = crate::elements::Statement::Token(token!($op));
+
+        top.into_binary($t1,$t2)
+    });
+
+
 }
