@@ -69,6 +69,17 @@ impl Statement {
         }
     }
 
+    pub fn is_fieldsep(&self) -> bool {
+        match self {
+            Statement::Token(token) => match token.get_type() {
+                TokenType::Comma |
+                TokenType::SemiColon => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     pub fn is_expr(&self) -> bool {
         match self {
             Statement::Token(token) => match token.get_type() {
@@ -141,4 +152,62 @@ impl std::fmt::Display for Statement {
             Statement::Binary(op,e1,e2) => write!(f,"({} {} {})",op,e1,e2),
         }
     }
+}
+
+
+mod tests {
+
+    #[test]
+    fn unop() {
+        use crate::elements::{ Token, TokenType, Statement };
+        for t in vec![TokenType::Minus, TokenType::Not, TokenType::Pound] {
+            let statement = Statement::Token(Token::simple(t));
+            assert!(statement.is_unop());
+        }
+
+        for t in vec![TokenType::Plus, TokenType::Star] {
+            let statement = Statement::Token(Token::simple(t));
+            assert!(!statement.is_unop());
+        }
+
+    }
+    
+    #[test]
+    fn binop() {
+        use crate::elements::{ Token, TokenType, Statement };
+        for t in vec![
+            TokenType::Plus, TokenType::Minus, TokenType::Star,
+            TokenType::Slash, TokenType::Carrot, TokenType::Percent,
+            TokenType::DoublePeriod, TokenType::GreaterThan, TokenType::GreaterEqual,
+            TokenType::LessThan, TokenType::LessEqual, TokenType::Or, 
+            TokenType::EqualEqual, TokenType::NotEqual, TokenType::And 
+        ] {
+            let statement = Statement::Token(Token::simple(t));
+            println!("{}",statement);
+            assert!(statement.is_binop());
+        }
+
+        for t in vec![TokenType::Not, TokenType::Pound] {
+            let statement = Statement::Token(Token::simple(t));
+            assert!(!statement.is_binop());
+        }
+
+    }
+    
+    #[test]
+    fn fieldsep() {
+        use crate::elements::{ Token, TokenType, Statement };
+        for t in vec![ TokenType::Comma, TokenType::SemiColon ] {
+            let statement = Statement::Token(Token::simple(t));
+            println!("{}",statement);
+            assert!(statement.is_fieldsep());
+        }
+
+        for t in vec![TokenType::Not, TokenType::Pound] {
+            let statement = Statement::Token(Token::simple(t));
+            assert!(!statement.is_fieldsep());
+        }
+
+    }
+
 }
