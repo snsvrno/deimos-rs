@@ -1,17 +1,25 @@
+/// all references to a spec are from the [lua 5.1 spec](https://www.lua.org/manual/5.1/manual.html#8)
+
 use crate::elements::Token;
 use crate::elements::TokenType;
 
 #[derive(PartialEq,Debug)]
 pub enum Statement {
     Token(Token),
-    Unary(Token,Box<Statement>), // unop, expr
-    Binary(Token,Box<Statement>,Box<Statement>), // binop, expr1, expr2
+    Unary(Token,Box<Statement>),                    // unop, expr
+    Binary(Token,Box<Statement>,Box<Statement>),    // binop, expr1, expr2
+
+    FieldNamed(Box<Statement>,Box<Statement>),      // [expr]=expr 
+    FieldBracket(Box<Statement>,Box<Statement>),    // Name=expr
+    FieldList(Vec<Box<Statement>>),                 // field {fieldsep field} [fieldsep]
+
+    TableConstructor(Vec<Box<Statement>>),          // { fieldlist }
 }
 
 impl Statement {
         pub fn tokens_to_statements(tokens : Vec<Token>) -> Vec<Statement> {
-        /// convinence function that converts a vec<token> to a vec<statement>
-        /// by wrapping each token with a statement.
+        //! convinence function that converts a vec<token> to a vec<statement>
+        //! by wrapping each token with a statement.
         
         let mut statements : Vec<Statement> = Vec::new();
 
@@ -33,7 +41,14 @@ impl Statement {
         }
     }
 
+    ///////////////////////////////////////////////////////////////////////
+    /// IS CHECKS
+
     pub fn is_unop(&self) -> bool {
+        //! checking if a unary operator
+        //! 
+        //! '-' | not | '#'
+        
         match self {
             Statement::Token(token) => match token.get_type() {
                 TokenType::Minus | 
@@ -46,6 +61,12 @@ impl Statement {
     }
 
     pub fn is_binop(&self) -> bool {
+        //! checking if a binary operator
+        //! 
+        //! '+' | '-' | '*' | '/' | '^' | '%' | '..' | 
+        //! '<' | '<=' | '>' | '>=' | '==' | '~=' | 
+        //! and | or
+        
         match self {
             Statement::Token(token) => match token.get_type() {
                 TokenType::Plus |
@@ -70,6 +91,10 @@ impl Statement {
     }
 
     pub fn is_fieldsep(&self) -> bool {
+        //! checking if a field separator
+        //! 
+        //! ',' | ';'
+        
         match self {
             Statement::Token(token) => match token.get_type() {
                 TokenType::Comma |
@@ -81,6 +106,16 @@ impl Statement {
     }
 
     pub fn is_expr(&self) -> bool {
+        //! checking if an expression
+        //! 
+        //! nil | false | true | Number | String | '...' | function | 
+        //! prefixexp | tableconstructor | exp binop exp | unop exp 
+        
+        // TODO : implement '...'
+        // TODO : implement function
+        // TODO : implement prefixexpr
+        // TODO : implement tableconstructor
+    
         match self {
             Statement::Token(token) => match token.get_type() {
                 TokenType::Nil | 
@@ -95,6 +130,23 @@ impl Statement {
             _ => false,
         }
     }
+
+    pub fn is_field(&self) -> bool {
+        //! checking if something is a field
+        //! 
+        //! '[' exp ']' '=' exp | Name '=' exp | exp
+        
+        if self.is_expr() { return true; }
+
+        match self {
+            Statement::FieldBracket(_,_) |
+            Statement::FieldNamed(_,_) => true,
+            _ => false,
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////
+    /// INTO CONVERSIONS
 
     pub fn into_unary(self,expr : Statement) -> Statement {
         if !self.is_unop() { panic!("Cannot make {:?} into unary, not an operator.",self); }
@@ -133,6 +185,9 @@ impl Statement {
 
     }
 
+    ///////////////////////////////////////////////////////////////////
+    /// EXPLOSIONS
+
     pub fn explode_binary(self) -> (Token,Statement,Statement) {
         match self {
             Statement::Binary(op,ex1,ex2) => {
@@ -142,7 +197,24 @@ impl Statement {
 
         }
     }
-}
+
+    ///////////////////////////////////////////////////////////////////
+    /// DISPLAY HELPERS
+    
+    fn render_list(list : &Vec<Box<Statement>>) -> String {
+        let mut items = String::new();
+
+        for i in 0 .. list.len() {
+            if i > 0 {
+                items = format!("{}, {}",items,list[i]);
+            } else {
+                items = format!("{}",list[i]);
+            }
+        }
+
+        items
+    } 
+}   
 
 impl std::fmt::Display for Statement {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -150,6 +222,11 @@ impl std::fmt::Display for Statement {
             Statement::Token(token) => write!(f,"{}",token),
             Statement::Unary(op,expr) => write!(f,"({} {})",op,expr),
             Statement::Binary(op,e1,e2) => write!(f,"({} {} {})",op,e1,e2),
+            
+            Statement::FieldNamed(name,expr) => write!(f,"{} = {}",name,expr),     
+            Statement::FieldBracket(expr1,expr2) => write!(f,"[{}] = {}",expr1,expr2),
+            Statement::FieldList(list) => write!(f,"{}",Statement::render_list(&list)),
+            Statement::TableConstructor(list) => write!(f,"[ {} ]",Statement::render_list(&list)), 
         }
     }
 }
@@ -160,6 +237,7 @@ mod tests {
     #[test]
     fn unop() {
         use crate::elements::{ Token, TokenType, Statement };
+
         for t in vec![TokenType::Minus, TokenType::Not, TokenType::Pound] {
             let statement = Statement::Token(Token::simple(t));
             assert!(statement.is_unop());
@@ -175,6 +253,7 @@ mod tests {
     #[test]
     fn binop() {
         use crate::elements::{ Token, TokenType, Statement };
+
         for t in vec![
             TokenType::Plus, TokenType::Minus, TokenType::Star,
             TokenType::Slash, TokenType::Carrot, TokenType::Percent,
@@ -197,6 +276,7 @@ mod tests {
     #[test]
     fn fieldsep() {
         use crate::elements::{ Token, TokenType, Statement };
+
         for t in vec![ TokenType::Comma, TokenType::SemiColon ] {
             let statement = Statement::Token(Token::simple(t));
             println!("{}",statement);
@@ -207,7 +287,6 @@ mod tests {
             let statement = Statement::Token(Token::simple(t));
             assert!(!statement.is_fieldsep());
         }
-
     }
 
 }
