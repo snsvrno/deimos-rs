@@ -21,6 +21,10 @@ impl Token {
         &self.token_type
     }
 
+    pub fn get_code_slice(&self) -> &CodeSlice {
+        &self.code_slice
+    }
+
     #[cfg(test)]
     pub fn simple(token : TokenType)-> Token {
         Token {

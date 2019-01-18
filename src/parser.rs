@@ -5,6 +5,30 @@ use crate::elements::Chunk;
 use crate::elements::Statement;
 use crate::elements::TokenType;
 
+enum InternalError {
+    Syntax(usize,usize,usize,usize),
+    General(String),
+}
+
+impl InternalError {
+    fn render(self, raw_code : &str) -> String {
+        match self {
+            InternalError::General(string) => format!("{}",string),
+            InternalError::Syntax(start,end,line,col) => format!("Syntax error parsing code:\n      {}\n      ^ line: {} col: {}",
+                &raw_code[start .. end],
+                line,
+                col
+            ),
+        }
+    }
+}
+
+enum Option3<T> {
+    Some(T),
+    None,
+    Skip,
+}
+
 pub struct Parser<'a> {
     raw_code : &'a str,
     chunks : Vec<Chunk>,
@@ -17,21 +41,26 @@ impl<'a> Parser<'a> {
         
         let (raw_code, tokens) = scanner.disassemble();
         // converts the vec<Token> to a vec<Statement> for processessing
-        let mut raw_statements = Statement::tokens_to_statements(tokens);
+        let raw_statements = Statement::tokens_to_statements(tokens);
         // creates the empty chunk object needed for the returning struct.
         let mut chunks : Vec<Chunk> = Vec::new();
 
         // TODO : need to actually process the chunks, make different chunks
-        let processed_statements = Parser::process_statements(raw_statements)?;
-        chunks.push(Chunk::new(processed_statements));
+        match Parser::process_statements(raw_statements) {
+            // error handling
+            Err(error) => Err(format_err!("{}",error.render(&raw_code))),
+            Ok(processed_statements) => {
+                chunks.push(Chunk::new(processed_statements));
 
-        Ok(Parser {
-            raw_code : raw_code,
-            chunks : chunks,
-        })
+                Ok(Parser {
+                    raw_code : raw_code,
+                    chunks : chunks,
+                })
+            },
+        }
     }
 
-    fn process_statements(mut raw_statements : Vec<Statement>) -> Result<Vec<Statement>,Error> {
+    fn process_statements(mut raw_statements : Vec<Statement>) -> Result<Vec<Statement>,InternalError> {
         //! the meat and potatos of the parsing, used to split lines and form the statement tokens
         //! into real statements.
 
@@ -52,25 +81,36 @@ impl<'a> Parser<'a> {
             }
 
             let token = raw_statements.remove(0);
-            match token.as_token_type() {
+
+            let resulting_statement : Option3<Statement> = match token.as_token_type() {
                 TokenType::EOL => {
-                    working_statements.push(Parser::collapse_statement(statement)?);
-                    statement = Vec::new();
+                    if statement.len() > 0 {
+                        let stat = Parser::collapse_statement(statement)?;
+                        statement = Vec::new();
+                        Option3::Some(stat)
+                    } else {
+                        Option3::Skip
+                    }
                 },
                 TokenType::Do => {
                     let do_statement = Parser::collapse_block_statement(&mut raw_statements,TokenType::Do)?;
-                    working_statements.push(do_statement);
+                    Option3::Some(do_statement)
                 }
-                _ => {
-                    statement.push(token)
-                },
+                _ => Option3::None,
+            };
 
+            match resulting_statement {
+                Option3::Skip => (),
+                Option3::None => { statement.push(token); },
+                Option3::Some(stat) => {
+                    working_statements.push(stat);
+                },
             }
 
         }
     }
 
-    fn collapse_block_statement(raw_statements : &mut Vec<Statement>, starter : TokenType) -> Result<Statement,Error> {
+    fn collapse_block_statement(raw_statements : &mut Vec<Statement>, starter : TokenType) -> Result<Statement,InternalError> {
         //! takes block statements, like do-end and if-then-end, and processes them. works by
         //! finding the correct beginning and end of these blocks and then processing the insides.
         //! this should allow everything to be processed correctly (even with multiple nestings).
@@ -82,7 +122,7 @@ impl<'a> Parser<'a> {
         let mut working_statement : Vec<Statement> = Vec::new();
 
         loop {
-            if raw_statements.len() <= 0 { return Err(format_err!("Can't find the end of the statement!")); }
+            if raw_statements.len() <= 0 { return Err(InternalError::General("Can't find the end of the statement!".to_string())); }
                         
             let loop_token = raw_statements.remove(0);
             Statement::counting_loops(&loop_token, &mut loop_looker);
@@ -104,7 +144,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn collapse_statement(mut statement : Vec<Statement>) -> Result<Statement,Error> {
+    fn collapse_statement(mut statement : Vec<Statement>) -> Result<Statement,InternalError> {
         //! takes a list of Statements that can be collapsed down to a new statement.
         //! primarily used for taking a list of Tokens and making a single statement
         //! from them.
@@ -156,8 +196,18 @@ impl<'a> Parser<'a> {
         }
 
         // removes the first element of the list of statements,
-        // will panic tread if there is nothing in the statement
-        Ok(statement.remove(0))
+        match statement.len() {
+            0 => Err(InternalError::General("Statement is empty?".to_string())),
+            1 => Ok(statement.remove(0)),
+            _ => { 
+                let (line,col) = statement[0].get_code_display_info();
+                Err(InternalError::Syntax(
+                    statement[0].get_code_start(),
+                    statement[statement.len()-1].get_code_end(),
+                    line,col
+                )) 
+            },
+        }
     }
 
     fn peek_expr_before(pos : usize,statement : &Vec<Statement>) -> bool {
@@ -178,6 +228,27 @@ mod tests {
     fn unary_simple() {
         assert_eq!(setup_simple!("-5").chunks[0],
             chunk!(unary!("-","5")));
+    }
+
+    #[test]
+    fn syntax_errors() {
+        let raw_code = r"
+        5 + 5 - 5 * 3
+        do
+            225 + 523
+        end
+        5 + + 5
+        ";
+        let parser = setup_error!(raw_code);
+
+        match parser {
+            Err(error) => {
+                let manufacterd_error_msg = crate::parser::InternalError::Syntax(76,83,6,9);
+                assert_err!(error,manufacterd_error_msg.render(raw_code));
+                println!("{}",error)
+            },
+            Ok(_) => panic!("Should have failed"),
+        }
     }
 
     #[test]
@@ -210,4 +281,22 @@ mod tests {
             )));
     }
 
+
+    #[test]
+    #[ignore]
+    fn loops_complex() {
+        let parser = setup!(r"
+            do
+                5 + 4 - 5
+            end
+        ");
+
+        let check_against = chunk!(do_end!(
+            binary!("-",
+                s binary!("+","5","4"),
+                "4")
+        ));
+
+        assert_eq!(parser.chunks[0],check_against);
+    }
 }

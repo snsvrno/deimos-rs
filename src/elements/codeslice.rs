@@ -34,6 +34,20 @@ impl CodeSlice {
         }
     }
 
+    
+
+    pub fn get_range(&self) -> (usize,usize) {
+        (self.abs_start, self.abs_end)
+    }
+
+    pub fn get_line(&self) -> usize {
+        self.line_no
+    }
+
+    pub fn get_column(&self) -> usize {
+        self.start
+    }
+
     pub fn slice_code<'a>(&self, raw_code : &'a str) -> &'a str {
         &raw_code[self.abs_start .. self.abs_end]
     }

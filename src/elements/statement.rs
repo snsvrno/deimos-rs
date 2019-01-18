@@ -3,6 +3,8 @@
 use crate::elements::Token;
 use crate::elements::TokenType;
 
+use crate::elements::CodeSlice;
+
 #[derive(PartialEq,Debug)]
 pub enum Statement {
     Token(Token),
@@ -32,6 +34,9 @@ impl Statement {
         statements
     }
 
+    ///////////////////////////////////////////////////////////////////////
+    /// ACCESS METHODS
+
     pub fn as_token_type<'a>(&'a self) -> &'a TokenType {
         match self {
             Statement::Token(ref token) => {
@@ -40,6 +45,35 @@ impl Statement {
             _ => {
                 panic!("Cannot unwrap {:?} as a Token",self)
             }
+        }
+    }
+
+    pub fn get_code_start(&self) -> usize {
+        let (s,_) = self.get_code_slice();
+        s
+    }
+
+    pub fn get_code_end(&self) -> usize {
+        let (_,e) = self.get_code_slice();
+        e
+    }
+
+    fn get_code_slice(&self) -> (usize,usize) {
+        match self {
+            Statement::Token(ref token) => token.get_code_slice().get_range(),
+            _ => (0,0),
+        }
+    }
+
+    pub fn get_code_display_info(&self) -> (usize,usize) {
+        //! returns line & column
+        
+        match self {
+            Statement::Token(ref token) => { 
+                let slice = token.get_code_slice();
+                (slice.get_line(), slice.get_column())
+            },
+            _ => (0,0),
         }
     }
 
@@ -252,6 +286,7 @@ impl Statement {
 
     ///////////////////////////////////////////////////////////////////
     /// DISPLAY HELPERS
+    ///
     
     fn render_list(list : &Vec<Box<Statement>>) -> String {
         let mut items = String::new();
@@ -300,7 +335,6 @@ impl std::fmt::Display for Statement {
         }
     }
 }
-
 
 mod tests {
 
