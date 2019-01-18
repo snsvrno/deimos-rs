@@ -317,7 +317,7 @@ impl<'a> Scanner <'a> {
     }
 }
 
-mod test {
+mod tests {
 
     #[test]
     fn simple_scan() {

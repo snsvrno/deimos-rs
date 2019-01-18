@@ -175,13 +175,13 @@ impl<'a> Parser<'a> {
 mod tests {
 
     #[test]
-    fn simple_unary() {
+    fn unary_simple() {
         assert_eq!(setup_simple!("-5").chunks[0],
             chunk!(unary!("-","5")));
     }
 
     #[test]
-    fn simple_binary() {
+    fn binary_simple() {
         assert_eq!(setup_simple!("5+4").chunks[0],
             chunk!(binary!("+","5","4")));
 
@@ -203,10 +203,11 @@ mod tests {
     }
 
     #[test]
-    fn simple_loops() {
+    fn loops_simple() {
         assert_eq!(setup_simple!("do 5+4 end").chunks[0],
             chunk!(do_end!(
                 binary!("+","5","4")
             )));
     }
+
 }
