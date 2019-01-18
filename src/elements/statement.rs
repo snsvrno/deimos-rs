@@ -14,6 +14,8 @@ pub enum Statement {
     FieldList(Vec<Box<Statement>>),                 // field {fieldsep field} [fieldsep]
 
     TableConstructor(Vec<Box<Statement>>),          // { fieldlist }
+
+    DoEnd(Vec<Box<Statement>>),
 }
 
 impl Statement {
@@ -43,6 +45,15 @@ impl Statement {
 
     ///////////////////////////////////////////////////////////////////////
     /// IS CHECKS
+
+    pub fn is_token(&self,token:TokenType) -> bool {
+        //! checks if is a token and of that type
+
+        match self {
+            Statement::Token(t) => t.get_type() == &token,
+            _ => false,
+        }
+    }
 
     pub fn is_unop(&self) -> bool {
         //! checking if a unary operator
@@ -146,6 +157,36 @@ impl Statement {
     }
 
     ///////////////////////////////////////////////////////////////
+    /// COUNTING / COUNTER
+
+    pub fn counting_loops(statement : &Statement, depth : &mut usize) {
+        //! counting what loop we are in, so we can find nested loops and such,
+        //! a loop is of types:
+        //!
+        //! ```test
+        //!     do .. end
+        //!     while .. do .. end
+        //!     repeat .. until ..
+        //!     if .. then .. end
+        //!     for .. do .. end
+        //! ```
+
+        if let Statement::Token(token) = statement {
+            match token.get_type() {
+                // ending tokens
+                TokenType::End => {
+                    if *depth > 0 { *depth -= 1; }
+                },
+
+                // starting tokens
+                TokenType::If => *depth +=1,
+
+                _ => (),
+            }
+        }
+    }
+
+    ///////////////////////////////////////////////////////////////
     /// INTO CONVERSIONS
 
     pub fn into_unary(self,expr : Statement) -> Statement {
@@ -186,6 +227,17 @@ impl Statement {
     }
 
     ///////////////////////////////////////////////////////////////////
+    /// CREATIONS
+
+    pub fn create_do_end(mut statements : Vec<Statement>) -> Statement {
+        let mut list : Vec<Box<Statement>> = Vec::new();
+        for s in (0 .. statements.len()).rev() {
+            list.push(Box::new(statements.remove(s)));
+        }
+        Statement::DoEnd(list)
+    }
+
+    ///////////////////////////////////////////////////////////////////
     /// EXPLOSIONS
 
     pub fn explode_binary(self) -> (Token,Statement,Statement) {
@@ -214,6 +266,22 @@ impl Statement {
 
         items
     } 
+
+    fn render_statements(list : &Vec<Box<Statement>>) -> String {
+        if list.len() == 0 {
+            return "".to_string();
+        }
+
+        let mut string = format!("{}",list[0]);
+
+        if list.len() == 1 { return string; }
+        else {
+            for i in 1 .. list.len() {
+                string = format!("{}\n{}",string,list[i]);
+            }
+            return string;
+        }
+    }
 }   
 
 impl std::fmt::Display for Statement {
@@ -226,7 +294,9 @@ impl std::fmt::Display for Statement {
             Statement::FieldNamed(name,expr) => write!(f,"{} = {}",name,expr),     
             Statement::FieldBracket(expr1,expr2) => write!(f,"[{}] = {}",expr1,expr2),
             Statement::FieldList(list) => write!(f,"{}",Statement::render_list(&list)),
-            Statement::TableConstructor(list) => write!(f,"[ {} ]",Statement::render_list(&list)), 
+            Statement::TableConstructor(list) => write!(f,"[ {} ]",Statement::render_list(&list)),
+
+            Statement::DoEnd(exprs) => write!(f,"(do {} end)",Statement::render_statements(&exprs)),
         }
     }
 }

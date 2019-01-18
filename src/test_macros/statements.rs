@@ -37,6 +37,17 @@ macro_rules! binary {
 
         top.into_binary($t1,$t2)
     });
+}
 
+#[macro_export]
+macro_rules! do_end {
+    ($($statement:expr),*) => ({
+        let mut list : Vec<Box<crate::elements::Statement>> = Vec::new();
 
+        $(
+            list.push(Box::new($statement));
+        )*
+
+        crate::elements::Statement::DoEnd(list)
+    });
 }
