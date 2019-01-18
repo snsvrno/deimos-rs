@@ -121,31 +121,29 @@ mod tests {
 
     #[test]
     fn simple_unary() {
-        use crate::scanner::Scanner;
-        use crate::parser::Parser;
-
-        let scanner = Scanner::init("-5").scan().unwrap();
-        let parser = Parser::from_scanner(scanner).unwrap();
-
-        assert_eq!(1,parser.chunks.len());
-        assert_eq!(chunk!(unary!("-","5")), parser.chunks[0]);
+        assert_eq!(setup_simple!("-5").chunks[0],
+            chunk!(unary!("-","5")));
     }
 
     #[test]
     fn simple_binary() {
-        let parser = setup_simple!("5+4");
+        assert_eq!(setup_simple!("5+4").chunks[0],
+            chunk!(binary!("+","5","4")));
 
-        assert_eq!(1,parser.chunks.len());
-        assert_eq!(chunk!(binary!("+","5","4")), parser.chunks[0]);
-    
-        let parser2 = setup_simple!("5+4-3");
+        assert_eq!(setup_simple!("5+4-3").chunks[0],
+            chunk!(binary!("-",s binary!("+","5","4"),"3")));
 
-        assert_eq!(1,parser.chunks.len());
-        assert_eq!(chunk!(binary!("-",s binary!("+","5","4"),"3")), parser2.chunks[0]);
+        assert_eq!(setup_simple!("5+4*3").chunks[0],
+            chunk!(binary!("+","5",s binary!("*","4","3"))));
 
-        let parser3 = setup_simple!("5+4*3");
+        assert_eq!(setup_simple!("50 == 4 and 3 <= 10 or true").chunks[0],
+            chunk!(binary!("or",
+                s binary!("and",
+                    s binary!("==","50","4"),
+                    s binary!("<=","3","10")
+                ),
+                "true" ))
+            );
 
-        assert_eq!(1,parser.chunks.len());
-        assert_eq!(chunk!(binary!("+","5",s binary!("*","4","3"))), parser3.chunks[0]);
     }
 }
