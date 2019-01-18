@@ -213,7 +213,20 @@ impl Statement {
                 },
 
                 // starting tokens
-                TokenType::If => *depth +=1,
+                //
+                // doesn't do while or if because they aren't the true loop starter,
+                // if you take some code like 
+                //
+                //      b = b + 1
+                //      if b > 4 then
+                //          b = b * 10
+                //      end
+                //
+                // the `if b > 4` is the same depth as `b = b + 1`, but everything after the
+                // `then` is deeper. `while .. do .. end` is the same for the `while .. do`
+                // section
+                TokenType::Do |
+                TokenType::Then => *depth +=1,
 
                 _ => (),
             }

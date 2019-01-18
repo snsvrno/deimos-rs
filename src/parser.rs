@@ -283,18 +283,24 @@ mod tests {
 
 
     #[test]
-    #[ignore]
     fn loops_complex() {
         let parser = setup!(r"
             do
-                5 + 4 - 5
+                5 + 4 * 3
+                do
+                    1 + 2
+                end
             end
         ");
 
         let check_against = chunk!(do_end!(
-            binary!("-",
-                s binary!("+","5","4"),
-                "4")
+            binary!("+",
+                "5",
+                s binary!("*","4","3")
+            ),
+            do_end!(
+                binary!("+","1","2")
+            )
         ));
 
         assert_eq!(parser.chunks[0],check_against);
