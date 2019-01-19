@@ -51,3 +51,27 @@ macro_rules! do_end {
         crate::elements::Statement::DoEnd(list)
     });
 }
+
+#[macro_export]
+macro_rules! while_do_end {
+    ($expr:expr, $($statement:expr),*) => ({
+        let mut list : Vec<Box<crate::elements::Statement>> = Vec::new();
+        let expr = crate::elements::Statement::Token(token!($expr));
+
+        $(
+            list.push(Box::new($statement));
+        )*
+
+        crate::elements::Statement::WhileDoEnd(Box::new(expr),list)
+    });
+    
+    (s $expr:expr, $($statement:expr),*) => ({
+        let mut list : Vec<Box<crate::elements::Statement>> = Vec::new();
+
+        $(
+            list.push(Box::new($statement));
+        )*
+
+        crate::elements::Statement::WhileDoEnd(Box::new($expr),list)
+    });
+}

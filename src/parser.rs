@@ -7,6 +7,7 @@ use crate::elements::TokenType;
 
 enum InternalError {
     Syntax(usize,usize,usize,usize),
+    SyntaxMsg(String,usize,usize,usize,usize),
     General(String),
 }
 
@@ -15,6 +16,12 @@ impl InternalError {
         match self {
             InternalError::General(string) => format!("{}",string),
             InternalError::Syntax(start,end,line,col) => format!("Syntax error parsing code:\n      {}\n      ^ line: {} col: {}",
+                &raw_code[start .. end],
+                line,
+                col
+            ),
+            InternalError::SyntaxMsg(prefix,start,end,line,col) => format!("{}:\n      {}\n      ^ line: {} col: {}",
+                prefix,
                 &raw_code[start .. end],
                 line,
                 col
@@ -95,7 +102,11 @@ impl<'a> Parser<'a> {
                 TokenType::Do => {
                     let do_statement = Parser::collapse_block_statement(&mut raw_statements,TokenType::Do)?;
                     Option3::Some(do_statement)
-                }
+                },
+                TokenType::While => {
+                    let while_statement = Parser::collapse_block_statement(&mut raw_statements, TokenType::While)?;
+                    Option3::Some(while_statement)
+                },
                 _ => Option3::None,
             };
 
@@ -110,16 +121,36 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn collapse_block_statement(raw_statements : &mut Vec<Statement>, starter : TokenType) -> Result<Statement,InternalError> {
+    fn collapse_block_statement(mut raw_statements : &mut Vec<Statement>, starter : TokenType) -> Result<Statement,InternalError> {
         //! takes block statements, like do-end and if-then-end, and processes them. works by
         //! finding the correct beginning and end of these blocks and then processing the insides.
         //! this should allow everything to be processed correctly (even with multiple nestings).
         
-        // TODO : implement the other kinds of loops here, only works for Do-end and is hard coded
-        // for it.
-        
         let mut loop_looker = 1;
         let mut working_statement : Vec<Statement> = Vec::new();
+
+        // looks for any prestatments to the actual block, so like while .. do .. end:
+        //      
+        //            |<------>| this stuff here          
+        //      while value <= 3 do
+        //          ...
+        //      end
+        //
+        let pre_expr : Option<Statement> = match starter {
+            TokenType::While => {
+                match Parser::consume_until_token(&mut raw_statements, TokenType::Do, false) {
+                    Err((start,end,line,col)) => return Err(InternalError::SyntaxMsg("Couldn't find the `do` in the `while .. do .. end`".to_string(),
+                        start,end,line,col
+                    )),
+                    Ok(pre_tokens) => {
+                        println!("{:?}",pre_tokens);
+                        let expr = Parser::collapse_statement(pre_tokens)?;
+                        Some(expr)
+                    },
+                }
+            },
+            _ => None,
+        };
 
         loop {
             if raw_statements.len() <= 0 { return Err(InternalError::General("Can't find the end of the statement!".to_string())); }
@@ -134,7 +165,19 @@ impl<'a> Parser<'a> {
                     for p in processed_statements {
                         insides.push(Box::new(p));
                     }
-                    return Ok(Statement::DoEnd(insides));
+
+                    return match starter {
+                        TokenType::Do => Ok(Statement::DoEnd(insides)),
+                        TokenType::While => { 
+                            match pre_expr {
+                                None => Err(InternalError::General("while .. do .. end has no expression?!?, Impossible!".to_string())),
+                                Some(expr) => {
+                                    Ok(Statement::WhileDoEnd(Box::new(expr),insides)) 
+                                }
+                            }
+                        },
+                        _ => Err(InternalError::General("FALT".to_string())),
+                    };
                 },
                 false => {
                     working_statement.push(loop_token);
@@ -220,9 +263,37 @@ impl<'a> Parser<'a> {
         statement[pos+1].is_expr()
     }
 
+    fn consume_until_token(buffer : &mut Vec<Statement>, desired_token : TokenType, include : bool) -> Result<Vec<Statement>,(usize,usize,usize,usize)> {
+        let mut tokens : Vec<Statement> = Vec::new();
+        loop {
+            if buffer.len() <= 0 { 
+                let (line,col) = tokens[0].get_code_display_info();
+                return Err((
+                    tokens[0].get_code_start(),
+                    tokens[tokens.len()-1].get_code_end(),
+                    line,col
+                )); 
+            }
+
+            let token = buffer.remove(0);
+            
+            if token.as_token_type() == &desired_token {
+                println!("{} === {:?}",token,desired_token);
+                if include { tokens.push(token); }
+                return Ok(tokens);
+            } else {
+                println!("{} =/= {:?}",token,desired_token);
+                tokens.push(token);
+            }
+        }
+    }
+
 }
 
+#[cfg(test)]
 mod tests {
+
+    use crate::test_tools::load_file;
 
     #[test]
     fn unary_simple() {
@@ -279,19 +350,21 @@ mod tests {
             chunk!(do_end!(
                 binary!("+","5","4")
             )));
+        
+        assert_eq!(setup_simple!("while true do 5+4 end").chunks[0],
+            chunk!(while_do_end!("true",
+                binary!("+","5","4")
+            )));
     }
 
 
     #[test]
     fn loops_complex() {
-        let parser = setup!(r"
-            do
-                5 + 4 * 3
-                do
-                    1 + 2
-                end
-            end
-        ");
+        // TODO : figure out a better way to pair the code with the macro function, 
+        // maybe an external crate that contains all of it?
+
+        let code = load_file("loops_complex/do");
+        let parser = setup!(&code);
 
         let check_against = chunk!(do_end!(
             binary!("+",

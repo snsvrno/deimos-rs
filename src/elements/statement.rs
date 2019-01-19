@@ -18,6 +18,7 @@ pub enum Statement {
     TableConstructor(Vec<Box<Statement>>),          // { fieldlist }
 
     DoEnd(Vec<Box<Statement>>),
+    WhileDoEnd(Box<Statement>,Vec<Box<Statement>>),
 }
 
 impl Statement {
@@ -344,7 +345,8 @@ impl std::fmt::Display for Statement {
             Statement::FieldList(list) => write!(f,"{}",Statement::render_list(&list)),
             Statement::TableConstructor(list) => write!(f,"[ {} ]",Statement::render_list(&list)),
 
-            Statement::DoEnd(exprs) => write!(f,"(do {} end)",Statement::render_statements(&exprs)),
+            Statement::DoEnd(stats) => write!(f,"(do {} end)",Statement::render_statements(&stats)),
+            Statement::WhileDoEnd(expr,stats) => write!(f,"(while {} do {} end)",expr,Statement::render_statements(&stats)),
         }
     }
 }
