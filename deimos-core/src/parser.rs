@@ -4,10 +4,11 @@ use crate::scanner::Scanner;
 use crate::elements::Chunk;
 use crate::elements::Statement;
 use crate::elements::TokenType;
+use crate::elements::CodeSlice;
 
 enum InternalError {
-    Syntax(usize,usize,usize,usize),
-    SyntaxMsg(String,usize,usize,usize,usize),
+    Syntax(CodeSlice),
+    SyntaxMsg(String,CodeSlice),
     General(String),
 }
 
@@ -15,16 +16,16 @@ impl InternalError {
     fn render(self, raw_code : &str) -> String {
         match self {
             InternalError::General(string) => format!("{}",string),
-            InternalError::Syntax(start,end,line,col) => format!("Syntax error parsing code:\n      {}\n      ^ line: {} col: {}",
-                &raw_code[start .. end],
-                line,
-                col
+            InternalError::Syntax(code_slice) => format!("Syntax error parsing code:\n      {}\n      ^ line: {} col: {}",
+                code_slice.slice_code(raw_code),
+                code_slice.get_line(),
+                code_slice.get_column()
             ),
-            InternalError::SyntaxMsg(prefix,start,end,line,col) => format!("{}:\n      {}\n      ^ line: {} col: {}",
+            InternalError::SyntaxMsg(prefix,code_slice) => format!("{}:\n      {}\n      ^ line: {} col: {}",
                 prefix,
-                &raw_code[start .. end],
-                line,
-                col
+                code_slice.slice_code(raw_code),
+                code_slice.get_line(),
+                code_slice.get_column()
             ),
         }
     }
@@ -109,42 +110,9 @@ impl<'a> Parser<'a> {
                     Option3::Some(while_statement)
                 },
                 TokenType::Equal => {
-                    match Parser::contains_token(&statement, TokenType::Local) {
-                        true => Option3::None, // TODO : implement local assignment
-                        false => {
-                            match Parser::consume_until_token(&mut raw_statements, TokenType::EOL, false) {
-                                Err((start,end,line,col)) => return Err(InternalError::SyntaxMsg("Failed to find EOL".to_string(),
-                                    start,end,line,col
-                                )),
-                                Ok(exprs) => {
-                                    // splits the vars by ',' and the collapses each piece.
-                                    let var_list = {
-                                        let mut list : Vec<Statement> = Vec::new();
-                                        let splits_list = Parser::split_by_token(statement, TokenType::Comma);
-                                        for split in splits_list {
-                                            let stat : Statement = Parser::collapse_statement(split)?;
-                                            list.push(stat);
-                                        }
-                                        list
-                                    };
-                                    // splits the expressions by ',' and the collapses each piece.
-                                    let expr_list = {
-                                        let mut list : Vec<Statement> = Vec::new();
-                                        let splits_list = Parser::split_by_token(exprs, TokenType::Comma);
-                                        for split in splits_list {
-                                            let stat : Statement = Parser::collapse_statement(split)?;
-                                            list.push(stat);
-                                        }
-                                        list
-                                    };
-
-                                    let assignment = Statement::create_assignment(var_list,expr_list);
-                                    statement = Vec::new();
-                                    Option3::Some(assignment)
-                                },
-                            }
-                        } 
-                    }
+                    let assignment_statement = Parser::collapse_assignment(&mut raw_statements, statement)?;
+                    statement = Vec::new();
+                    Option3::Some(assignment_statement)
                 }
                 _ => Option3::None,
             };
@@ -157,6 +125,69 @@ impl<'a> Parser<'a> {
                 },
             }
 
+        }
+    }
+
+    fn collapse_assignment(mut raw_statements : &mut Vec<Statement>,mut statement : Vec<Statement>) -> Result<Statement,InternalError> {
+        //! processess the assignment statement format, is triggered when a '=' is found.
+        //! 
+        //! checks the following validations when creating the assignment
+        //! 
+        //! ``` text
+        //! 
+        //!     [x]    varlist `=´ explist
+        //!     [x]    varlist ::= var {`,´ var}
+        //!     [x]    explist ::= {exp `,´} exp
+        //! 
+        //! ```
+        
+        match Parser::contains_token(&statement, TokenType::Local) {
+            // a local assignment, TODO implement this
+            true => Err(InternalError::General("Not Implemented".to_string())),
+
+            // a standard assignment
+            false => {
+                match Parser::consume_until_token(&mut raw_statements, TokenType::EOL, false) {
+                    Err(code_slice) => Err(InternalError::SyntaxMsg("Failed to find EOL".to_string(),code_slice)),
+                    Ok(exprs) => {
+
+                        // splits the vars by ',' and the collapses each piece.
+                        let var_list = {
+                            let mut list : Vec<Statement> = Vec::new();
+                            let splits_list = Parser::split_by_token(statement, TokenType::Comma);
+                            for split in splits_list {
+                                let stat : Statement = Parser::collapse_statement(split)?;
+
+                                // checking each element making sure its an var statement
+                                if !stat.is_var() {
+                                    return Err(InternalError::SyntaxMsg("Left side of '=' must be a var statement".to_string(), stat.get_code_slice()))
+                                }
+                                list.push(stat);
+                            }
+                            list
+                        };
+
+                        // splits the expressions by ',' and the collapses each piece.
+                        let expr_list = {
+                            let mut list : Vec<Statement> = Vec::new();
+                            let splits_list = Parser::split_by_token(exprs, TokenType::Comma);
+                            for split in splits_list {
+                                let expr : Statement = Parser::collapse_statement(split)?;
+
+                                // checking each element making sure its an expr statement
+                                if !expr.is_expr() {
+                                    return Err(InternalError::SyntaxMsg("Right side of '=' must be a expr statement".to_string(), expr.get_code_slice()))
+                                }
+                                list.push(expr);
+                            }
+                            list
+                        };
+
+                        let assignment = Statement::create_assignment(var_list,expr_list);
+                        Ok(assignment)
+                    },
+                }
+            } 
         }
     }
 
@@ -178,9 +209,7 @@ impl<'a> Parser<'a> {
         let pre_expr : Option<Statement> = match starter {
             TokenType::While => {
                 match Parser::consume_until_token(&mut raw_statements, TokenType::Do, false) {
-                    Err((start,end,line,col)) => return Err(InternalError::SyntaxMsg("Couldn't find the `do` in the `while .. do .. end`".to_string(),
-                        start,end,line,col
-                    )),
+                    Err(code_slice) => return Err(InternalError::SyntaxMsg("Couldn't find the `do` in the `while .. do .. end`".to_string(),code_slice)),
                     Ok(pre_tokens) => {
                         let expr = Parser::collapse_statement(pre_tokens)?;
                         Some(expr)
@@ -280,14 +309,10 @@ impl<'a> Parser<'a> {
         match statement.len() {
             0 => Err(InternalError::General("Statement is empty?".to_string())),
             1 => Ok(statement.remove(0)),
-            _ => { 
-                let (line,col) = statement[0].get_code_display_info();
-                Err(InternalError::Syntax(
-                    statement[0].get_code_start(),
-                    statement[statement.len()-1].get_code_end(),
-                    line,col
-                )) 
-            },
+            _ => Err(InternalError::Syntax(CodeSlice::create_from(
+                    &statement[0].get_code_slice(),
+                    &statement[statement.len()-1].get_code_slice()
+                ))),
         }
     }
 
@@ -301,16 +326,11 @@ impl<'a> Parser<'a> {
         statement[pos+1].is_expr()
     }
 
-    fn consume_until_token(buffer : &mut Vec<Statement>, desired_token : TokenType, include : bool) -> Result<Vec<Statement>,(usize,usize,usize,usize)> {
+    fn consume_until_token(buffer : &mut Vec<Statement>, desired_token : TokenType, include : bool) -> Result<Vec<Statement>,CodeSlice> {
         let mut tokens : Vec<Statement> = Vec::new();
         loop {
             if buffer.len() <= 0 { 
-                let (line,col) = tokens[0].get_code_display_info();
-                return Err((
-                    tokens[0].get_code_start(),
-                    tokens[tokens.len()-1].get_code_end(),
-                    line,col
-                )); 
+                return Err(CodeSlice::create_from(&tokens[0].get_code_slice(),&tokens[tokens.len()-1].get_code_slice())); 
             }
 
             let token = buffer.remove(0);
@@ -370,27 +390,6 @@ mod tests {
     fn unary_simple() {
         assert_eq!(setup_simple!("-5").chunks[0],
             chunk!(unary!("-","5")));
-    }
-
-    #[test]
-    fn syntax_errors() {
-        let raw_code = r"
-        5 + 5 - 5 * 3
-        do
-            225 + 523
-        end
-        5 + + 5
-        ";
-        let parser = setup_error!(raw_code);
-
-        match parser {
-            Err(error) => {
-                let manufacterd_error_msg = crate::parser::InternalError::Syntax(76,83,6,9);
-                assert_err!(error,manufacterd_error_msg.render(raw_code));
-                println!("{}",error)
-            },
-            Ok(_) => panic!("Should have failed"),
-        }
     }
 
     #[test]

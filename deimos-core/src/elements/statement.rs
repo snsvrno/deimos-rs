@@ -52,35 +52,12 @@ impl Statement {
         }
     }
 
-    pub fn get_code_start(&self) -> usize {
-        let (s,_) = self.get_code_slice();
-        s
-    }
-
-    pub fn get_code_end(&self) -> usize {
-        let (_,e) = self.get_code_slice();
-        e
-    }
-
-    fn get_code_slice(&self) -> (usize,usize) {
+    pub fn get_code_slice(&self) -> CodeSlice {
         match self {
-            Statement::Token(ref token) => token.get_code_slice().get_range(),
-            _ => (0,0),
+            Statement::Token(ref token) => token.get_code_slice().clone(),
+            _ => CodeSlice::empty(),
         }
     }
-
-    pub fn get_code_display_info(&self) -> (usize,usize) {
-        //! returns line & column
-        
-        match self {
-            Statement::Token(ref token) => { 
-                let slice = token.get_code_slice();
-                (slice.get_line(), slice.get_column())
-            },
-            _ => (0,0),
-        }
-    }
-
     ///////////////////////////////////////////////////////////////////////
     /// IS CHECKS
 
@@ -212,6 +189,28 @@ impl Statement {
             },
             Statement::Binary(_,_,_) |
             Statement::Unary(_,_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        //! checks if a statement is a variable
+        //! 
+        //! ```test
+        //! 
+        //!     [x]    Name
+        //!     [ ]    prefixexp `[´ exp `]´
+        //!     [ ]    prefixexp `.´ Name 
+        //! 
+        //! ```
+        
+        match self {
+            Statement::Token(token) => {
+                match token.get_type() {
+                    TokenType::Identifier(_) => true,
+                    _ => false,
+                }
+            },
             _ => false,
         }
     }
