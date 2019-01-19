@@ -55,23 +55,46 @@ macro_rules! do_end {
 #[macro_export]
 macro_rules! while_do_end {
     ($expr:expr, $($statement:expr),*) => ({
-        let mut list : Vec<Box<crate::elements::Statement>> = Vec::new();
         let expr = crate::elements::Statement::Token(token!($expr));
-
-        $(
-            list.push(Box::new($statement));
-        )*
-
-        crate::elements::Statement::WhileDoEnd(Box::new(expr),list)
+        crate::elements::Statement::WhileDoEnd(Box::new(expr),list!($($statement),*))
     });
     
     (s $expr:expr, $($statement:expr),*) => ({
+        crate::elements::Statement::WhileDoEnd(Box::new(expr),list!($($statement),*))
+    });
+}
+
+#[macro_export]
+macro_rules! list {
+    ($($statement:expr),*) => ({
         let mut list : Vec<Box<crate::elements::Statement>> = Vec::new();
 
         $(
             list.push(Box::new($statement));
         )*
 
-        crate::elements::Statement::WhileDoEnd(Box::new($expr),list)
+        list
+    });
+}
+
+#[macro_export]
+macro_rules! empty {
+    () => ({
+        crate::elements::Statement::Empty
+    });
+}
+
+
+#[macro_export]
+macro_rules! assignment {
+    ($vars:expr,$exprs:expr) => ({
+        crate::elements::Statement::Assignment($vars,$exprs)
+    });
+}
+
+#[macro_export]
+macro_rules! statement {
+    ($token:expr) => ({
+        crate::elements::Statement::Token(token!($token))
     });
 }

@@ -7,18 +7,21 @@ use crate::elements::CodeSlice;
 
 #[derive(PartialEq,Debug)]
 pub enum Statement {
+    Empty,
     Token(Token),
-    Unary(Token,Box<Statement>),                    // unop, expr
-    Binary(Token,Box<Statement>,Box<Statement>),    // binop, expr1, expr2
+    Unary(Token,Box<Statement>),                            // unop, expr
+    Binary(Token,Box<Statement>,Box<Statement>),            // binop, expr1, expr2
 
-    FieldNamed(Box<Statement>,Box<Statement>),      // [expr]=expr 
-    FieldBracket(Box<Statement>,Box<Statement>),    // Name=expr
-    FieldList(Vec<Box<Statement>>),                 // field {fieldsep field} [fieldsep]
+    FieldNamed(Box<Statement>,Box<Statement>),              // [expr]=expr 
+    FieldBracket(Box<Statement>,Box<Statement>),            // Name=expr
+    FieldList(Vec<Box<Statement>>),                         // field {fieldsep field} [fieldsep]
 
-    TableConstructor(Vec<Box<Statement>>),          // { fieldlist }
+    TableConstructor(Vec<Box<Statement>>),                  // { fieldlist }
 
     DoEnd(Vec<Box<Statement>>),
     WhileDoEnd(Box<Statement>,Vec<Box<Statement>>),
+
+    Assignment(Vec<Box<Statement>>,Vec<Box<Statement>>),    // varlist `=´ explist
 }
 
 impl Statement {
@@ -93,7 +96,14 @@ impl Statement {
     pub fn is_unop(&self) -> bool {
         //! checking if a unary operator
         //! 
-        //! '-' | not | '#'
+        //! ```text
+        //! 
+        //!     [x]    '-' | 
+        //!     [x]    not |        
+        //!     [x]    '#'
+        //! 
+        //! ``` 
+
         
         match self {
             Statement::Token(token) => match token.get_type() {
@@ -109,9 +119,25 @@ impl Statement {
     pub fn is_binop(&self) -> bool {
         //! checking if a binary operator
         //! 
-        //! '+' | '-' | '*' | '/' | '^' | '%' | '..' | 
-        //! '<' | '<=' | '>' | '>=' | '==' | '~=' | 
-        //! and | or
+        //! ```text
+        //! 
+        //!     [x]    '+'  | 
+        //!     [x]    '-'  | 
+        //!     [x]    '*'  | 
+        //!     [x]    '/'  | 
+        //!     [x]    '^'  | 
+        //!     [x]    '%'  | 
+        //!     [x]    '..' | 
+        //!     [x]    '<'  | 
+        //!     [x]    '<=' | 
+        //!     [x]    '>'  | 
+        //!     [x]    '>=' | 
+        //!     [x]    '==' | 
+        //!     [x]    '~=' | 
+        //!     [x]    and  | 
+        //!     [x]    or
+        //! 
+        //! ```
         
         match self {
             Statement::Token(token) => match token.get_type() {
@@ -139,7 +165,12 @@ impl Statement {
     pub fn is_fieldsep(&self) -> bool {
         //! checking if a field separator
         //! 
-        //! ',' | ';'
+        //! ```text
+        //! 
+        //!     [x]   ',' | 
+        //!     [x]   ';'
+        //! 
+        //! ```
         
         match self {
             Statement::Token(token) => match token.get_type() {
@@ -154,13 +185,21 @@ impl Statement {
     pub fn is_expr(&self) -> bool {
         //! checking if an expression
         //! 
-        //! nil | false | true | Number | String | '...' | function | 
-        //! prefixexp | tableconstructor | exp binop exp | unop exp 
-        
-        // TODO : implement '...'
-        // TODO : implement function
-        // TODO : implement prefixexpr
-        // TODO : implement tableconstructor
+        //! ```text
+        //! 
+        //!     [x]   nil | 
+        //!     [x]   false | 
+        //!     [x]   true | 
+        //!     [x]   Number | 
+        //!     [x]   String | 
+        //!     [ ]   '...' | 
+        //!     [ ]   function | 
+        //!     [ ]   prefixexp | 
+        //!     [ ]   tableconstructor | 
+        //!     [x]   exp binop exp | 
+        //!     [x]   unop exp 
+        //! 
+        //! ```
     
         match self {
             Statement::Token(token) => match token.get_type() {
@@ -177,10 +216,45 @@ impl Statement {
         }
     }
 
+    pub fn is_stat(&self) -> bool {
+        //! checking if a statement
+        //! 
+        //! ```text
+        //! 
+        //!     [x]   varlist `=´ explist | 
+		//!     [ ]   functioncall | 
+		//!     [x]   do block end | 
+		//!     [x]   while exp do block end | 
+		//!     [ ]   repeat block until exp | 
+		//!     [ ]   if exp then block {elseif exp then block} [else block] end | 
+		//!     [ ]   for Name `=´ exp `,´ exp [`,´ exp] do block end | 
+		//!     [ ]   for namelist in explist do block end | 
+		//!     [ ]   function funcname funcbody | 
+		//!     [ ]   local function Name funcbody | 
+		//!     [ ]   local namelist [`=´ explist] 
+        //! 
+        //! ```
+        
+        match self {
+            Statement::DoEnd(_) |
+            Statement::WhileDoEnd(_,_) |
+            Statement::Assignment(_,_) => true,
+
+            _ => false,
+        }
+
+    }
+
     pub fn is_field(&self) -> bool {
         //! checking if something is a field
         //! 
-        //! '[' exp ']' '=' exp | Name '=' exp | exp
+        //! ```text
+        //! 
+        //!     [x]   '[' exp ']' '=' exp |
+        //!     [x]   Name '=' exp | 
+        //!     [x]   exp
+        //! 
+        //! ```
         
         if self.is_expr() { return true; }
 
@@ -285,6 +359,34 @@ impl Statement {
         Statement::DoEnd(list)
     }
 
+    fn convert_to_box_list(list : Vec<Statement>) -> Vec<Box<Statement>> {
+        let mut new_list : Vec<Box<Statement>> = Vec::new();
+
+        for l in list {
+            new_list.push(Box::new(l))
+        }
+
+        new_list
+    }
+         
+    pub fn create_assignment(mut vars: Vec<Statement>, mut exprs : Vec<Statement>) -> Statement {
+        // gets the two lists the same length
+        loop {
+            if vars.len() == exprs.len() { break; }
+            match vars.len() > exprs.len() {
+                true => exprs.push(Statement::Empty),
+                false => vars.push(Statement::Empty),
+            }
+        }
+        
+        if vars.len() != exprs.len() {
+            panic!("Error creating assignment, varlist and expr list must be the same!");
+        }
+
+        Statement::Assignment(Statement::convert_to_box_list(vars),Statement::convert_to_box_list(exprs))
+    }
+
+
     ///////////////////////////////////////////////////////////////////
     /// EXPLOSIONS
 
@@ -347,6 +449,10 @@ impl std::fmt::Display for Statement {
 
             Statement::DoEnd(stats) => write!(f,"(do {} end)",Statement::render_statements(&stats)),
             Statement::WhileDoEnd(expr,stats) => write!(f,"(while {} do {} end)",expr,Statement::render_statements(&stats)),
+
+            Statement::Assignment(varlist,exprlist) => write!(f,"(= {} {})",Statement::render_list(&varlist),Statement::render_list(&exprlist)),
+
+            Statement::Empty => write!(f,"nil"),
         }
     }
 }

@@ -90,6 +90,7 @@ impl<'a> Parser<'a> {
             let token = raw_statements.remove(0);
 
             let resulting_statement : Option3<Statement> = match token.as_token_type() {
+                TokenType::EOF |
                 TokenType::EOL => {
                     if statement.len() > 0 {
                         let stat = Parser::collapse_statement(statement)?;
@@ -107,6 +108,44 @@ impl<'a> Parser<'a> {
                     let while_statement = Parser::collapse_block_statement(&mut raw_statements, TokenType::While)?;
                     Option3::Some(while_statement)
                 },
+                TokenType::Equal => {
+                    match Parser::contains_token(&statement, TokenType::Local) {
+                        true => Option3::None, // TODO : implement local assignment
+                        false => {
+                            match Parser::consume_until_token(&mut raw_statements, TokenType::EOL, false) {
+                                Err((start,end,line,col)) => return Err(InternalError::SyntaxMsg("Failed to find EOL".to_string(),
+                                    start,end,line,col
+                                )),
+                                Ok(exprs) => {
+                                    // splits the vars by ',' and the collapses each piece.
+                                    let var_list = {
+                                        let mut list : Vec<Statement> = Vec::new();
+                                        let splits_list = Parser::split_by_token(statement, TokenType::Comma);
+                                        for split in splits_list {
+                                            let stat : Statement = Parser::collapse_statement(split)?;
+                                            list.push(stat);
+                                        }
+                                        list
+                                    };
+                                    // splits the expressions by ',' and the collapses each piece.
+                                    let expr_list = {
+                                        let mut list : Vec<Statement> = Vec::new();
+                                        let splits_list = Parser::split_by_token(exprs, TokenType::Comma);
+                                        for split in splits_list {
+                                            let stat : Statement = Parser::collapse_statement(split)?;
+                                            list.push(stat);
+                                        }
+                                        list
+                                    };
+
+                                    let assignment = Statement::create_assignment(var_list,expr_list);
+                                    statement = Vec::new();
+                                    Option3::Some(assignment)
+                                },
+                            }
+                        } 
+                    }
+                }
                 _ => Option3::None,
             };
 
@@ -143,7 +182,6 @@ impl<'a> Parser<'a> {
                         start,end,line,col
                     )),
                     Ok(pre_tokens) => {
-                        println!("{:?}",pre_tokens);
                         let expr = Parser::collapse_statement(pre_tokens)?;
                         Some(expr)
                     },
@@ -277,15 +315,48 @@ impl<'a> Parser<'a> {
 
             let token = buffer.remove(0);
             
-            if token.as_token_type() == &desired_token {
-                println!("{} === {:?}",token,desired_token);
+            // checks if the token is the desired token, but if the desired token is EOL then it will also match on EOF token).
+            if token.as_token_type() == &desired_token || (&desired_token == &TokenType::EOL && token.as_token_type() == &TokenType::EOF) {
                 if include { tokens.push(token); }
                 return Ok(tokens);
             } else {
-                println!("{} =/= {:?}",token,desired_token);
                 tokens.push(token);
             }
         }
+    }
+
+    fn contains_token(tokens : &Vec<Statement>, token_to_look_for : TokenType) -> bool {
+        //!
+        //! 
+        //! should only be used for Statement::Token(_) so shouldn't panic.
+        
+        for t in tokens.iter() {
+            if t.as_token_type() == &token_to_look_for { return true; }
+        }
+        false
+    }
+
+    fn split_by_token(mut tokens : Vec<Statement>, splitter : TokenType) -> Vec<Vec<Statement>> {
+        let mut splits : Vec<Vec<Statement>> = Vec::new();
+
+        let mut working : Vec<Statement> = Vec::new();
+        loop {
+            if tokens.len() <= 0 { break; }
+
+            let token = tokens.remove(0);
+            if token.as_token_type() == &splitter {
+                splits.push(working);
+                working = Vec::new();
+            } else {
+                working.push(token);
+            }
+        }
+
+        if working.len() > 0 {
+            splits.push(working);
+        }
+
+        splits
     }
 
 }
@@ -354,6 +425,37 @@ mod tests {
         assert_eq!(setup_simple!("while true do 5+4 end").chunks[0],
             chunk!(while_do_end!("true",
                 binary!("+","5","4")
+            )));
+    }
+
+    #[test]
+    fn assignment_simple() {
+
+        // single assignment
+        assert_eq!(setup_simple!("bob = 5 + 4").chunks[0],
+            chunk!(assignment!(
+                list!( statement!("bob") ),
+                list!( binary!("+","5","4") )
+            )));
+
+        // double assignment
+        assert_eq!(setup_simple!("bob,linda = 5,4").chunks[0],
+            chunk!(assignment!(
+                list!( statement!("bob"),statement!("linda") ),
+                list!( statement!("5"),statement!("4") )
+            )));
+
+        // mismatched assignment
+        assert_eq!(setup_simple!("bob,linda,jorge = 5 * 4 + 3,false").chunks[0],
+            chunk!(assignment!(
+                list!( statement!("bob"),statement!("linda"),statement!("jorge") ),
+                list!( 
+                    binary!("+",
+                        s binary!("*","5","4"),
+                        "3"),
+                    statement!("false"),
+                    empty!()
+                )
             )));
     }
 

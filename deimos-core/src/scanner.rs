@@ -48,7 +48,10 @@ impl<'a> Scanner <'a> {
             let token = self.next_token()?;
 
             match token.get_type() {
-                TokenType::EOF => break,
+                TokenType::EOF => {
+                    self.tokens.push(token);
+                    break;
+                },
                 TokenType::EOL => { 
                     self.current_line += 1;
                     self.current_line_pos = self.current_pos;
@@ -328,14 +331,14 @@ mod tests {
         
         let scanner = Scanner::init("5+5").scan().unwrap();
         assert_eq!(scanner.tokens,vec![
-            token!("5"),token!("+"),token!("5")
+            token!("5"),token!("+"),token!("5"),token!("EOF")
         ]);
 
         assert_eq!("5",scanner.tokens[0].slice_code(&scanner.raw_code));
         assert_eq!("+",scanner.tokens[1].slice_code(&scanner.raw_code));
         assert_eq!("5",scanner.tokens[2].slice_code(&scanner.raw_code));
 
-        assert_eq!(scanner.tokens.len(),3);
+        assert_eq!(scanner.tokens.len(),4);
     }
 
     #[test]
@@ -356,7 +359,7 @@ mod tests {
         
         jim = (12 * 3) + -34").scan().unwrap();
 
-        assert_eq!(scanner.tokens.len(), 26);
+        assert_eq!(scanner.tokens.len(), 27);
         assert!(scanner.tokens[0] == comment_tt!(""));
         assert!(scanner.tokens[2] == comment_tt!(""));
         assert!(scanner.tokens[10] == comment_tt!(""));
@@ -390,16 +393,15 @@ mod tests {
             "end","\n","\n",
             "if","bob",">=","10","then","\n",
             "bob","=","-","1233","\n",
-            "end","\n"
+            "end","\n","EOF"
         ];
 
 
-        for i in 0 .. token_stream.len() {
+        assert_eq!(token_stream.len(),scanner.tokens.len());
+
+        for i in 0 .. token_stream.len()-1 {
             assert_eq!(token_stream[i],scanner.tokens[i].slice_code(&scanner.raw_code));
             assert_eq!(token!(token_stream[i]),scanner.tokens[i])
         }
-        assert_eq!(token_stream.len(),scanner.tokens.len());
-
-        //assert_eq!(scanner.tokens.len(),3);
     }
 }
