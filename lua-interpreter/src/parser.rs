@@ -293,7 +293,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
 
-    use crate::test_tools::load_file;
+    use lua_test::*;
 
     #[test]
     fn unary_simple() {
@@ -359,6 +359,7 @@ mod tests {
 
 
     #[test]
+    #[ignore]
     fn loops_complex() {
         // TODO : figure out a better way to pair the code with the macro function, 
         // maybe an external crate that contains all of it?

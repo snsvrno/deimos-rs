@@ -1,8 +1,5 @@
-[package]
-name = "lua-interpreter"
-version = "0.1.0"
-authors = ["snsvrno <snsvrno@tuta.io>"]
-edition = "2018"
-
-[dependencies]
-failure = "0.1"
+[workspace]
+members = [
+    "lua-interpreter",
+    "lua-test"
+]

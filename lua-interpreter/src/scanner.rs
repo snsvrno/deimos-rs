@@ -317,7 +317,10 @@ impl<'a> Scanner <'a> {
     }
 }
 
+#[cfg(test)] 
 mod tests {
+
+    use lua_test::*;
 
     #[test]
     fn simple_scan() {

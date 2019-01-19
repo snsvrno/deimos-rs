@@ -1,0 +1,5 @@
+{
+    // cleans up errors from tests in the UI because it isn't 
+    // properly using dev-dependencies.
+    "rust.cfg_test": false,
+}
