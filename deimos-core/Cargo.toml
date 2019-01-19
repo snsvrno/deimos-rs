@@ -6,6 +6,3 @@ edition = "2018"
 
 [dependencies]
 failure = "0.1"
-
-[dev-dependencies]
-lua-test = { version = "*", path = " ../../../lua-test" }

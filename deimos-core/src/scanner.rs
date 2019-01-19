@@ -320,7 +320,7 @@ impl<'a> Scanner <'a> {
 #[cfg(test)] 
 mod tests {
 
-    use lua_test::*;
+    use crate::test_crate::*;
 
     #[test]
     fn simple_scan() {

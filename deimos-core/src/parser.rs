@@ -293,7 +293,7 @@ impl<'a> Parser<'a> {
 #[cfg(test)]
 mod tests {
 
-    use lua_test::*;
+    use crate::test_crate::*;
 
     #[test]
     fn unary_simple() {

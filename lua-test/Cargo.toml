@@ -1,6 +1,0 @@
-[package]
-name = "lua-test"
-description = "A testing crate for Lua-Interpreter"
-version = "0.1.0"
-authors = ["snsvrno <snsvrno@tuta.io>"]
-edition = "2018"
