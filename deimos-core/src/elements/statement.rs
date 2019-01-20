@@ -23,6 +23,9 @@ pub enum Statement {
 
     Assignment(Vec<Box<Statement>>,Vec<Box<Statement>>),        // varlist `=´ explist
     AssignmentLocal(Vec<Box<Statement>>,Vec<Box<Statement>>),   // local namelist [`=´ explist] 
+
+    Function(Vec<Box<Statement>>,Vec<Box<Statement>>),          // funcbody ::= `(´ [parlist] `)´ block end
+    Return(Vec<Box<Statement>>),                                // laststat ::= return [explist] | break
 }
 
 impl Statement {
@@ -231,13 +234,14 @@ impl Statement {
 		//!     [ ]   for namelist in explist do block end | 
 		//!     [ ]   function funcname funcbody | 
 		//!     [ ]   local function Name funcbody | 
-		//!     [ ]   local namelist [`=´ explist] 
+		//!     [x]   local namelist [`=´ explist] 
         //! 
         //! ```
         
         match self {
             Statement::DoEnd(_) |
             Statement::WhileDoEnd(_,_) |
+            Statement::AssignmentLocal(_,_) |
             Statement::Assignment(_,_) => true,
 
             _ => false,
@@ -381,6 +385,26 @@ impl Statement {
         new_list
     }
 
+    pub fn create_field(first : Statement, second :Statement) -> Option<Statement> {
+        //! creates a field object based on what the statements are. Assumes
+        //! that the syntax has been checked and results in the is call.
+        //! 
+        //! ```text
+        //! 
+        //!     field ::= `[´ exp `]´ `=´ exp | Name `=´ exp | exp
+        //! 
+        //! ```
+        
+        if first.is_name() && second.is_expr() {
+            Some(Statement::FieldNamed(Box::new(first),Box::new(second)))
+        } else if first.is_expr() && second.is_expr() {
+            Some(Statement::FieldBracket(Box::new(first),Box::new(second)))
+        } else {
+            None
+        }
+
+    }
+
     pub fn create_assignment(mut vars: Vec<Statement>, mut exprs : Vec<Statement>, local : bool) -> Statement {
         // gets the two lists the same length
         loop {
@@ -468,67 +492,102 @@ impl std::fmt::Display for Statement {
 
             Statement::Assignment(varlist,exprlist) => write!(f,"(= {} {})",Statement::render_list(&varlist),Statement::render_list(&exprlist)),
             Statement::AssignmentLocal(varlist,exprlist) => write!(f,"(= local {} {})",Statement::render_list(&varlist),Statement::render_list(&exprlist)),
-
+            
+            Statement::Function(args,body) => write!(f,"(fn<{}> {} end)",Statement::render_list(&args),Statement::render_list(&body)),
+            Statement::Return(list) => write!(f,"(return {})",Statement::render_list(&list)),
+            
             Statement::Empty => write!(f,"nil"),
         }
     }
 }
 
+#[cfg(test)]
 mod tests {
+
+    #[macro_use] use crate::test_crate::*;
+    use crate::elements::{ Token, TokenType, Statement };
 
     #[test]
     fn unop() {
-        use crate::elements::{ Token, TokenType, Statement };
-
-        for t in vec![TokenType::Minus, TokenType::Not, TokenType::Pound] {
-            let statement = Statement::Token(Token::simple(t));
-            assert!(statement.is_unop());
+        //! ```text
+        //! 
+        //!     unop ::= `-´ | not | `#´
+        //! 
+        //! ```
+        
+        for t in vec!["-", "not", "#"] {
+            assert!(statement!(t).is_unop());
         }
 
-        for t in vec![TokenType::Plus, TokenType::Star] {
-            let statement = Statement::Token(Token::simple(t));
-            assert!(!statement.is_unop());
+        for t in vec!["+", "*"] {
+            assert!(!statement!(t).is_unop());
         }
 
     }
     
     #[test]
     fn binop() {
-        use crate::elements::{ Token, TokenType, Statement };
+        //! ```text
+        //! 
+        //!     binop ::= `+´ | `-´ | `*´ | `/´ | `^´ | `%´ | `..´ | 
+		//!               `<´ | `<=´ | `>´ | `>=´ | `==´ | `~=´ | 
+		//!               and | or
+        //! 
+        //! ```
 
         for t in vec![
-            TokenType::Plus, TokenType::Minus, TokenType::Star,
-            TokenType::Slash, TokenType::Carrot, TokenType::Percent,
-            TokenType::DoublePeriod, TokenType::GreaterThan, TokenType::GreaterEqual,
-            TokenType::LessThan, TokenType::LessEqual, TokenType::Or, 
-            TokenType::EqualEqual, TokenType::NotEqual, TokenType::And 
+            "+", "-", "*", "/", "^", "%",
+            "..", "<", "<=", ">", ">=", "or", 
+            "==", "~=", "And" 
         ] {
-            let statement = Statement::Token(Token::simple(t));
-            println!("{}",statement);
-            assert!(statement.is_binop());
+            assert!(statement!(t).is_binop());
         }
 
-        for t in vec![TokenType::Not, TokenType::Pound] {
-            let statement = Statement::Token(Token::simple(t));
-            assert!(!statement.is_binop());
+        for t in vec!["not", "#"] {
+            assert!(!statement!(t).is_binop());
         }
 
     }
     
     #[test]
     fn fieldsep() {
-        use crate::elements::{ Token, TokenType, Statement };
+        //! ```text
+        //! 
+        //!     fieldsep ::= `,´ | `;´
+        //! 
+        //! ```
 
-        for t in vec![ TokenType::Comma, TokenType::SemiColon ] {
-            let statement = Statement::Token(Token::simple(t));
-            println!("{}",statement);
-            assert!(statement.is_fieldsep());
+        for t in vec![ ",", ";" ] {
+            assert!(statement!(t).is_fieldsep());
         }
 
-        for t in vec![TokenType::Not, TokenType::Pound] {
-            let statement = Statement::Token(Token::simple(t));
-            assert!(!statement.is_fieldsep());
+        for t in vec!["not", "#"] {
+            assert!(!statement!(t).is_fieldsep());
         }
     }
 
+    #[test]
+    fn field() {
+        //! ```text
+        //! 
+        //!     field ::= `[´ exp `]´ `=´ exp | 
+        //!               Name `=´ exp | 
+        //!               exp
+        //! 
+        //! ```
+
+        let one = Statement::create_field(statement!("2"),statement!("2"));
+        assert!(one.is_some());
+        assert!(one.unwrap().is_field());
+
+        
+        let two = Statement::create_field(statement!("linda"),statement!("2"));
+        assert!(two.is_some());
+        assert!(two.unwrap().is_field());
+
+        
+        let three = binary!("+","2","4");
+        assert!(three.is_field());
+
+    }
 }

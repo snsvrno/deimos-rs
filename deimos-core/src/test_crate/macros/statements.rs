@@ -87,14 +87,14 @@ macro_rules! empty {
 
 #[macro_export]
 macro_rules! assignment {
-    ($vars:expr,$exprs:expr) => ({
-        crate::elements::Statement::Assignment($vars,$exprs)
+    (($($var:expr),*),($($exprs:expr),*)) => ({
+        crate::elements::Statement::Assignment(list!($($var),*),list!($($exprs),*))
     });
 }
 #[macro_export]
 macro_rules! assignment_local {
-    ($vars:expr,$exprs:expr) => ({
-        crate::elements::Statement::AssignmentLocal($vars,$exprs)
+    (($($var:expr),*),($($exprs:expr),*)) => ({
+        crate::elements::Statement::AssignmentLocal(list!($($var),*),list!($($exprs),*))
     });
 }
 
@@ -102,5 +102,19 @@ macro_rules! assignment_local {
 macro_rules! statement {
     ($token:expr) => ({
         crate::elements::Statement::Token(token!($token))
+    });
+}
+
+#[macro_export]
+macro_rules! function {
+    (($($par:expr),*), $($stat:expr),*) => ({
+        crate::elements::Statement::Function(list!($($par),*),list!($($stat),*))
+    });
+}
+
+#[macro_export]
+macro_rules! return_stat {
+    ($($exprs:expr),*) => ({
+        crate::elements::Statement::Return(list!($($exprs),*))
     });
 }

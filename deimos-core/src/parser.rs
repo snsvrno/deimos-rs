@@ -450,29 +450,36 @@ mod tests {
         // single assignment
         assert_eq!(setup_simple!("bob = 5 + 4").chunks[0],
             chunk!(assignment!(
-                list!( statement!("bob") ),
-                list!( binary!("+","5","4") )
+                ( statement!("bob") ),
+                ( binary!("+","5","4") )
             )));
 
         // single assignment, local
         assert_eq!(setup_simple!("local bob = 5 + 4").chunks[0],
             chunk!(assignment_local!(
-                list!( statement!("bob") ),
-                list!( binary!("+","5","4") )
+                ( statement!("bob") ),
+                ( binary!("+","5","4") )
             )));
 
         // double assignment
         assert_eq!(setup_simple!("bob,linda = 5,4").chunks[0],
             chunk!(assignment!(
-                list!( statement!("bob"),statement!("linda") ),
-                list!( statement!("5"),statement!("4") )
+                ( statement!("bob"),statement!("linda") ),
+                ( statement!("5"),statement!("4") )
+            )));
+
+        // double assignment, local
+        assert_eq!(setup_simple!("local bob,linda = 5,4").chunks[0],
+            chunk!(assignment_local!(
+                ( statement!("bob"),statement!("linda") ),
+                ( statement!("5"),statement!("4") )
             )));
 
         // mismatched assignment
         assert_eq!(setup_simple!("bob,linda,jorge = 5 * 4 + 3,false").chunks[0],
             chunk!(assignment!(
-                list!( statement!("bob"),statement!("linda"),statement!("jorge") ),
-                list!( 
+                ( statement!("bob"),statement!("linda"),statement!("jorge") ),
+                ( 
                     binary!("+",
                         s binary!("*","5","4"),
                         "3"),
@@ -503,5 +510,31 @@ mod tests {
         ));
 
         assert_eq!(parser.chunks[0],check_against);
+    }
+
+    #[test]
+    fn functions() {
+        // TODO : figure out a better way to pair the code with the macro function, 
+        // maybe an external crate that contains all of it?
+
+        let function_def = setup_simple!("
+        function test(a,b,c)
+            local temp = a + b
+            return c * temp
+        end
+        ");
+
+        let check_against = chunk!(function!(
+            (statement!("a"),statement!("b"),statement!("c")),
+            assignment_local!(
+                ( statement!("temp") ),
+                ( binary!("+","a","b") )
+            ),
+            return_stat!(
+                binary!("*","c","temp")
+            )
+        ));
+
+        assert_eq!(function_def.chunks[0],check_against);
     }
 }

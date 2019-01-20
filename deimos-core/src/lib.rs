@@ -3,8 +3,7 @@ use failure::Error;
 mod elements;
 
 #[cfg(test)]
-#[macro_use]
-mod test_crate;
+#[macro_use] mod test_crate;
 
 mod scanner; use crate::scanner::Scanner;
 mod parser;
