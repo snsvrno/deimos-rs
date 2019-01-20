@@ -91,6 +91,12 @@ macro_rules! assignment {
         crate::elements::Statement::Assignment($vars,$exprs)
     });
 }
+#[macro_export]
+macro_rules! assignment_local {
+    ($vars:expr,$exprs:expr) => ({
+        crate::elements::Statement::AssignmentLocal($vars,$exprs)
+    });
+}
 
 #[macro_export]
 macro_rules! statement {

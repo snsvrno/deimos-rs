@@ -138,56 +138,65 @@ impl<'a> Parser<'a> {
         //!     [x]    varlist `=´ explist
         //!     [x]    varlist ::= var {`,´ var}
         //!     [x]    explist ::= {exp `,´} exp
+        //!     [x]    local namelist [`=´ explist] 
+        //!     [x]    namelist ::= Name {`,´ Name}
         //! 
         //! ```
         
-        match Parser::contains_token(&statement, TokenType::Local) {
-            // a local assignment, TODO implement this
-            true => Err(InternalError::General("Not Implemented".to_string())),
 
-            // a standard assignment
-            false => {
-                match Parser::consume_until_token(&mut raw_statements, TokenType::EOL, false) {
-                    Err(code_slice) => Err(InternalError::SyntaxMsg("Failed to find EOL".to_string(),code_slice)),
-                    Ok(exprs) => {
+        let local = Parser::contains_token(&statement, TokenType::Local);
+        Parser::remove_token(&mut statement, TokenType::Local);
 
-                        // splits the vars by ',' and the collapses each piece.
-                        let var_list = {
-                            let mut list : Vec<Statement> = Vec::new();
-                            let splits_list = Parser::split_by_token(statement, TokenType::Comma);
-                            for split in splits_list {
-                                let stat : Statement = Parser::collapse_statement(split)?;
+        match Parser::consume_until_token(&mut raw_statements, TokenType::EOL, false) {
+            Err(code_slice) => Err(InternalError::SyntaxMsg("Failed to find EOL".to_string(),code_slice)),
+            Ok(exprs) => {
 
-                                // checking each element making sure its an var statement
+                // splits the vars by ',' and the collapses each piece.
+                let var_list = {
+                    let mut list : Vec<Statement> = Vec::new();
+                    let splits_list = Parser::split_by_token(statement, TokenType::Comma);
+                    for split in splits_list {
+                        let stat : Statement = Parser::collapse_statement(split)?;
+
+                        // checking each element making sure its the right stuff
+                        match local {
+                            false => {
+                                // if it is not a local, then the left can be a varlist / var
                                 if !stat.is_var() {
-                                    return Err(InternalError::SyntaxMsg("Left side of '=' must be a var statement".to_string(), stat.get_code_slice()))
+                                    return Err(InternalError::SyntaxMsg("Left side of '=' must be a var".to_string(), stat.get_code_slice()))
                                 }
-                                list.push(stat);
-                            }
-                            list
-                        };
-
-                        // splits the expressions by ',' and the collapses each piece.
-                        let expr_list = {
-                            let mut list : Vec<Statement> = Vec::new();
-                            let splits_list = Parser::split_by_token(exprs, TokenType::Comma);
-                            for split in splits_list {
-                                let expr : Statement = Parser::collapse_statement(split)?;
-
-                                // checking each element making sure its an expr statement
-                                if !expr.is_expr() {
-                                    return Err(InternalError::SyntaxMsg("Right side of '=' must be a expr statement".to_string(), expr.get_code_slice()))
+                            },
+                            true => {
+                                // if it is local then it must be a namelist, not a varlist.  
+                                if !stat.is_name() {
+                                    return Err(InternalError::SyntaxMsg("Left side of a local '=' must be a name".to_string(), stat.get_code_slice()))
                                 }
-                                list.push(expr);
                             }
-                            list
-                        };
+                        }
+                        list.push(stat);
+                    }
+                    list
+                };
 
-                        let assignment = Statement::create_assignment(var_list,expr_list);
-                        Ok(assignment)
-                    },
-                }
-            } 
+                // splits the expressions by ',' and the collapses each piece.
+                let expr_list = {
+                    let mut list : Vec<Statement> = Vec::new();
+                    let splits_list = Parser::split_by_token(exprs, TokenType::Comma);
+                    for split in splits_list {
+                        let expr : Statement = Parser::collapse_statement(split)?;
+
+                        // checking each element making sure its an expr statement
+                        if !expr.is_expr() {
+                            return Err(InternalError::SyntaxMsg("Right side of '=' must be a expr statement".to_string(), expr.get_code_slice()))
+                        }
+                        list.push(expr);
+                    }
+                    list
+                };
+
+                let assignment = Statement::create_assignment(var_list,expr_list,local);
+                Ok(assignment)
+            },
         }
     }
 
@@ -345,6 +354,14 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn remove_token(buffer : &mut Vec<Statement>, desired_token : TokenType) {
+        for i in (0 .. buffer.len()).rev() {
+            if buffer[i].as_token_type() == &desired_token {
+                buffer.remove(i);
+            }
+        }
+    }
+
     fn contains_token(tokens : &Vec<Statement>, token_to_look_for : TokenType) -> bool {
         //!
         //! 
@@ -433,6 +450,13 @@ mod tests {
         // single assignment
         assert_eq!(setup_simple!("bob = 5 + 4").chunks[0],
             chunk!(assignment!(
+                list!( statement!("bob") ),
+                list!( binary!("+","5","4") )
+            )));
+
+        // single assignment, local
+        assert_eq!(setup_simple!("local bob = 5 + 4").chunks[0],
+            chunk!(assignment_local!(
                 list!( statement!("bob") ),
                 list!( binary!("+","5","4") )
             )));

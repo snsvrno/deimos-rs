@@ -9,19 +9,20 @@ use crate::elements::CodeSlice;
 pub enum Statement {
     Empty,
     Token(Token),
-    Unary(Token,Box<Statement>),                            // unop, expr
-    Binary(Token,Box<Statement>,Box<Statement>),            // binop, expr1, expr2
+    Unary(Token,Box<Statement>),                                // unop, expr
+    Binary(Token,Box<Statement>,Box<Statement>),                // binop, expr1, expr2
 
-    FieldNamed(Box<Statement>,Box<Statement>),              // [expr]=expr 
-    FieldBracket(Box<Statement>,Box<Statement>),            // Name=expr
-    FieldList(Vec<Box<Statement>>),                         // field {fieldsep field} [fieldsep]
+    FieldNamed(Box<Statement>,Box<Statement>),                  // [expr]=expr 
+    FieldBracket(Box<Statement>,Box<Statement>),                // Name=expr
+    FieldList(Vec<Box<Statement>>),                             // field {fieldsep field} [fieldsep]
 
-    TableConstructor(Vec<Box<Statement>>),                  // { fieldlist }
+    TableConstructor(Vec<Box<Statement>>),                      // { fieldlist }
 
     DoEnd(Vec<Box<Statement>>),
     WhileDoEnd(Box<Statement>,Vec<Box<Statement>>),
 
-    Assignment(Vec<Box<Statement>>,Vec<Box<Statement>>),    // varlist `=´ explist
+    Assignment(Vec<Box<Statement>>,Vec<Box<Statement>>),        // varlist `=´ explist
+    AssignmentLocal(Vec<Box<Statement>>,Vec<Box<Statement>>),   // local namelist [`=´ explist] 
 }
 
 impl Statement {
@@ -244,6 +245,18 @@ impl Statement {
 
     }
 
+    pub fn is_name(&self) -> bool {
+        //! name is the same thing is TokenType::Idenfitier
+        
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::Identifier(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
     pub fn is_field(&self) -> bool {
         //! checking if something is a field
         //! 
@@ -367,8 +380,8 @@ impl Statement {
 
         new_list
     }
-         
-    pub fn create_assignment(mut vars: Vec<Statement>, mut exprs : Vec<Statement>) -> Statement {
+
+    pub fn create_assignment(mut vars: Vec<Statement>, mut exprs : Vec<Statement>, local : bool) -> Statement {
         // gets the two lists the same length
         loop {
             if vars.len() == exprs.len() { break; }
@@ -382,7 +395,11 @@ impl Statement {
             panic!("Error creating assignment, varlist and expr list must be the same!");
         }
 
-        Statement::Assignment(Statement::convert_to_box_list(vars),Statement::convert_to_box_list(exprs))
+
+        match local {
+            true => Statement::AssignmentLocal(Statement::convert_to_box_list(vars),Statement::convert_to_box_list(exprs)),
+            false => Statement::Assignment(Statement::convert_to_box_list(vars),Statement::convert_to_box_list(exprs))
+        }
     }
 
 
@@ -450,6 +467,7 @@ impl std::fmt::Display for Statement {
             Statement::WhileDoEnd(expr,stats) => write!(f,"(while {} do {} end)",expr,Statement::render_statements(&stats)),
 
             Statement::Assignment(varlist,exprlist) => write!(f,"(= {} {})",Statement::render_list(&varlist),Statement::render_list(&exprlist)),
+            Statement::AssignmentLocal(varlist,exprlist) => write!(f,"(= local {} {})",Statement::render_list(&varlist),Statement::render_list(&exprlist)),
 
             Statement::Empty => write!(f,"nil"),
         }
