@@ -504,8 +504,7 @@ impl std::fmt::Display for Statement {
 #[cfg(test)]
 mod tests {
 
-    #[macro_use] use crate::test_crate::*;
-    use crate::elements::{ Token, TokenType, Statement };
+    use crate::test_crate::*;
 
     #[test]
     fn unop() {
@@ -538,7 +537,7 @@ mod tests {
         for t in vec![
             "+", "-", "*", "/", "^", "%",
             "..", "<", "<=", ">", ">=", "or", 
-            "==", "~=", "And" 
+            "==", "~=", "and" 
         ] {
             assert!(statement!(t).is_binop());
         }
@@ -575,6 +574,8 @@ mod tests {
         //!               exp
         //! 
         //! ```
+
+        use crate::elements::Statement;
 
         let one = Statement::create_field(statement!("2"),statement!("2"));
         assert!(one.is_some());

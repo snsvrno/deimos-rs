@@ -1,10 +1,9 @@
-use failure::Error;
-
-mod elements;
-
 #[cfg(test)]
 #[macro_use] mod test_crate;
 
+use failure::Error;
+
+mod elements;
 mod scanner; use crate::scanner::Scanner;
 mod parser;
 

@@ -142,6 +142,7 @@ impl TokenType {
             "{" => Some(TokenType::LeftMoustache),
             "}" => Some(TokenType::RightMoustache),
             ";" => Some(TokenType::SemiColon),
+            "," => Some(TokenType::Comma),
             ":" => Some(TokenType::Colon),
             ")," => Some(TokenType::Comma),
             "." => Some(TokenType::Period),

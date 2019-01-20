@@ -513,6 +513,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn functions() {
         // TODO : figure out a better way to pair the code with the macro function, 
         // maybe an external crate that contains all of it?
