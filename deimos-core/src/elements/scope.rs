@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use failure::Error;
 
 use crate::elements::Statement;
+use crate::elements::TokenType;
 
 pub struct Scope {
     vars : HashMap<String,Statement>,

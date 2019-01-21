@@ -508,7 +508,7 @@ mod tests {
         // TODO : figure out a better way to pair the code with the macro function, 
         // maybe an external crate that contains all of it?
 
-        let code = load_file("loops_complex/do");
+        let code = include_str!("../../lua/loops_complex/do.lua");
         let parser = setup!(&code);
 
         let check_against = chunk!(do_end!(

@@ -10,7 +10,7 @@ use crate::elements::Scope;
 
 use crate::elements::statement_evals;
 
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub enum Statement {
     Empty,
     Token(Token),
@@ -51,8 +51,10 @@ impl Statement {
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         match self {
             Statement::Binary(op,s1,s2) => {
+                let eval_s1 = s1.eval(&mut scope)?;
+                let eval_s2 = s2.eval(&mut scope)?;
                 match op.get_type() {
-                    TokenType::Plus => statement_evals::plus(&s1,&s2),
+                    TokenType::Plus => statement_evals::plus(&eval_s1,&eval_s2),
                     _ => Err(format_err!("{} is not a binary operator",op)),
                 }
             },
@@ -76,6 +78,13 @@ impl Statement {
 
                 Ok(Statement::Empty)
             },
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::Identifier(ref var_name) => match scope.get_value(var_name) {
+                    Some(value) => Ok(value.clone()),
+                    None => Ok(Statement::Empty),
+                },
+                _ => Ok(self.clone())
+            }
             _ => Ok(Statement::Empty)
         }
     }
@@ -208,6 +217,22 @@ impl Statement {
         }
     }
 
+    pub fn is_prefix(&self) -> bool {
+        //! checking if an pre-expression
+        //! 
+        //! ```text
+        //! 
+        //!     [x]   var | 
+        //!     [ ]   functioncall | 
+        //!     [ ]   `(´ exp `)´
+        //! 
+        //! ```
+        
+        if self.is_var() { return true; }
+
+        return false;
+    }
+
     pub fn is_expr(&self) -> bool {
         //! checking if an expression
         //! 
@@ -220,13 +245,15 @@ impl Statement {
         //!     [x]   String | 
         //!     [ ]   '...' | 
         //!     [ ]   function | 
-        //!     [ ]   prefixexp | 
+        //!     [x]   prefixexp | 
         //!     [ ]   tableconstructor | 
         //!     [x]   exp binop exp | 
         //!     [x]   unop exp 
         //! 
         //! ```
     
+        if self.is_prefix() { return true; }
+
         match self {
             Statement::Token(token) => match token.get_type() {
                 TokenType::Nil | 

@@ -35,14 +35,14 @@ mod tests {
     use crate::test_crate::*;
 
     #[test]
-    fn simple() {
-        let code = r"
-        bob = 5 + 3
-        ";
-
+    fn assignments() {
+        let code = include_str!("../../lua/basic/assignments.lua");
         let eval = setup_eval!(&code);
-        println!("bob is {:?}",eval.get_value("bob"));
-        assert_eq!(&8_f32, eval.get_value("bob").unwrap().as_number());
+        
+        assert_eq!(&1_f32, eval.get_value("a").unwrap().as_number());
+        assert_eq!(&2_f32, eval.get_value("b").unwrap().as_number());
+        assert_eq!(&10_f32, eval.get_value("c").unwrap().as_number());
+        assert_eq!(&3_f32, eval.get_value("d").unwrap().as_number());
         
     }
 }

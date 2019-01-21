@@ -1,7 +1,7 @@
 use crate::elements::CodeSlice;
 use crate::elements::TokenType;
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct Token {
     token_type : TokenType,
     

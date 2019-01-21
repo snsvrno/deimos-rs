@@ -1,4 +1,4 @@
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub enum TokenType {
     /// Tokens taken from the Lua [5.1 manual](https://www.lua.org/manual/5.1/manual.html#2.1)
 
