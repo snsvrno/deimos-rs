@@ -31,6 +31,15 @@ macro_rules! setup {
 }
 
 #[macro_export]
+macro_rules! setup_eval {
+    ($code:expr) => ({
+        let scanner = crate::scanner::Scanner::init($code).scan().unwrap();
+        let parser = crate::parser::Parser::from_scanner(scanner).unwrap();
+        crate::eval::Eval::from_parser(parser).unwrap()
+    });
+}
+
+#[macro_export]
 macro_rules! assert_err {
     ($err1:expr, $err2:expr) => ({
         assert_eq!(

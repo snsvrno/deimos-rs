@@ -1,9 +1,14 @@
 /// all references to a spec are from the [lua 5.1 spec](https://www.lua.org/manual/5.1/manual.html#8)
 
+use failure::{Error,format_err};
+
 use crate::elements::Token;
 use crate::elements::TokenType;
 
 use crate::elements::CodeSlice;
+use crate::elements::Scope;
+
+use crate::elements::statement_evals;
 
 #[derive(PartialEq,Debug)]
 pub enum Statement {
@@ -29,7 +34,8 @@ pub enum Statement {
 }
 
 impl Statement {
-        pub fn tokens_to_statements(tokens : Vec<Token>) -> Vec<Statement> {
+
+    pub fn tokens_to_statements(tokens : Vec<Token>) -> Vec<Statement> {
         //! convinence function that converts a vec<token> to a vec<statement>
         //! by wrapping each token with a statement.
         
@@ -42,17 +48,55 @@ impl Statement {
         statements
     }
 
+    pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
+        match self {
+            Statement::Binary(op,s1,s2) => {
+                match op.get_type() {
+                    TokenType::Plus => statement_evals::plus(&s1,&s2),
+                    _ => Err(format_err!("{} is not a binary operator",op)),
+                }
+            },
+            Statement::Assignment(vars,exprs) => {
+                let mut results : Vec<Statement> = Vec::new();
+                for ex in exprs.iter() {
+                    results.push(ex.eval(&mut scope)?);
+                }
+
+                for i in (0 .. vars.len()).rev() {
+                    match *vars[i] {
+                        Statement::Token(ref token) => match token.get_type() {
+                            TokenType::Identifier(ref var_name) => {
+                                scope.assign(&var_name,results.remove(i))?;
+                            },
+                            _=> { return Err(format_err!("Assignment: don't know what to do with {}",token)); },
+                        },
+                        _ => (),
+                    }
+                }
+
+                Ok(Statement::Empty)
+            },
+            _ => Ok(Statement::Empty)
+        }
+    }
+
     ///////////////////////////////////////////////////////////////////////
     /// ACCESS METHODS
 
     pub fn as_token_type<'a>(&'a self) -> &'a TokenType {
         match self {
-            Statement::Token(ref token) => {
-                &token.get_type()
+            Statement::Token(ref token) => &token.get_type(),
+            _ => panic!("Cannot unwrap {:?} as a Token",self),
+        }
+    }
+
+    pub fn as_number<'a>(&'a self) -> &'a f32 {
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::Number(num) => num,
+                _ => panic!("Cannot unwrap {:?} as a number",self),
             },
-            _ => {
-                panic!("Cannot unwrap {:?} as a Token",self)
-            }
+            _ => panic!("Cannot unwrap {:?} as a number",self),
         }
     }
 
@@ -62,6 +106,7 @@ impl Statement {
             _ => CodeSlice::empty(),
         }
     }
+
     ///////////////////////////////////////////////////////////////////////
     /// IS CHECKS
 
@@ -255,6 +300,18 @@ impl Statement {
         match self {
             Statement::Token(ref token) => match token.get_type() {
                 TokenType::Identifier(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_number(&self) -> bool {
+        //! checking if its a number
+        
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::Number(_) => true,
                 _ => false,
             },
             _ => false,

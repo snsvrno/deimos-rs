@@ -43,6 +43,10 @@ pub struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
+
+    ////////////////////////////////////////////////////////////////////
+    /// PUBLIC FUNCTIONS
+
     pub fn from_scanner(scanner : Scanner <'a>) -> Result<Parser,Error> {
         //! creates a completed parser from a scanner, this means all the tokens
         //! are grouped and organized into chunks and ready to execute, or process
@@ -54,6 +58,7 @@ impl<'a> Parser<'a> {
         let mut chunks : Vec<Chunk> = Vec::new();
 
         // TODO : need to actually process the chunks, make different chunks
+        // FIX : what
         match Parser::process_statements(raw_statements) {
             // error handling
             Err(error) => Err(format_err!("{}",error.render(&raw_code))),
@@ -68,6 +73,13 @@ impl<'a> Parser<'a> {
         }
     }
 
+    pub fn disassemble(self) -> (&'a str, Vec<Chunk>) {
+        (self.raw_code,self.chunks)
+    }
+
+    ////////////////////////////////////////////////////////////////////
+    /// PRIVATE FUNCTIONS
+    
     fn process_statements(mut raw_statements : Vec<Statement>) -> Result<Vec<Statement>,InternalError> {
         //! the meat and potatos of the parsing, used to split lines and form the statement tokens
         //! into real statements.

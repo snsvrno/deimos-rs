@@ -12,3 +12,8 @@ pub use crate::elements::chunk::Chunk;
 
 mod statement;
 pub use crate::elements::statement::Statement;
+
+mod scope;
+pub use crate::elements::scope::Scope;
+
+pub mod statement_evals;

@@ -6,6 +6,7 @@ use failure::Error;
 mod elements;
 mod scanner; use crate::scanner::Scanner;
 mod parser;
+mod eval;
 
 pub fn scan(code : &str) -> Result<Scanner,Error> {
     let scanner = Scanner::init(code).scan()?;
