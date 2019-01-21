@@ -218,6 +218,16 @@ impl TokenType {
     }
 }
 
+impl std::fmt::Display for TokenType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TokenType::Number(ref num) => write!(f,"{}",num),
+            TokenType::String(ref string) => write!(f,"{}",string),
+            _ => write!(f,"{:?}",self),
+        }
+    }
+}
+
 mod tests {
     
     #[test]

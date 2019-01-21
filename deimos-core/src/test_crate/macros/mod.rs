@@ -9,3 +9,6 @@ pub use crate::test_crate::macros::chunk::*;
 
 #[macro_use] pub mod setup;
 pub use crate::test_crate::macros::setup::*;
+
+#[macro_use] pub mod testing;
+pub use crate::test_crate::macros::testing::*;

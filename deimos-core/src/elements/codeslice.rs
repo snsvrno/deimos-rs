@@ -29,8 +29,8 @@ impl CodeSlice {
         CodeSlice {
             abs_start : abs_start, abs_end : abs_end,
             line_no : line,
-            start : abs_start - line_start_pos + 1,
-            end : abs_end - line_start_pos + 1,
+            start : 1 + abs_start - line_start_pos,
+            end : 1 + abs_end - line_start_pos,
         }
     }
 

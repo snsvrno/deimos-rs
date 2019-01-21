@@ -43,6 +43,26 @@ mod tests {
         assert_eq!(&2_f32, eval.get_value("b").unwrap().as_number());
         assert_eq!(&10_f32, eval.get_value("c").unwrap().as_number());
         assert_eq!(&3_f32, eval.get_value("d").unwrap().as_number());
+        assert_eq!("a string here", eval.get_value("e").unwrap().as_string());
         
+    }
+
+    #[test]
+    fn binaryops() {
+        let code = include_str!("../../lua/basic/binops.lua");
+        let eval = setup_eval!(&code);
+        
+        assert_eq!(&101_f32, eval.get_value("a").unwrap().as_number());
+        assert_eq!(&2_f32, eval.get_value("b1").unwrap().as_number());
+        assert_eq!(&-2_f32, eval.get_value("b2").unwrap().as_number());
+        assert_eq!(&40_f32, eval.get_value("c").unwrap().as_number());
+        assert_eq!(&3_f32, eval.get_value("d1").unwrap().as_number());
+        assert_float!(&1.333_f32, eval.get_value("d2").unwrap().as_number());
+        assert_eq!(&0_f32, eval.get_value("e1").unwrap().as_number());
+        assert_eq!(&2_f32, eval.get_value("e2").unwrap().as_number());
+        assert_eq!(&8_f32, eval.get_value("f").unwrap().as_number());
+        assert_eq!("34", eval.get_value("g1").unwrap().as_string());
+        assert_eq!("asmb", eval.get_value("g2").unwrap().as_string());
+        assert_eq!(&15_f32, eval.get_value("h").unwrap().as_number());
     }
 }

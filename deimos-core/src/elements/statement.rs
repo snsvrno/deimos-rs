@@ -54,7 +54,21 @@ impl Statement {
                 let eval_s1 = s1.eval(&mut scope)?;
                 let eval_s2 = s2.eval(&mut scope)?;
                 match op.get_type() {
-                    TokenType::Plus => statement_evals::plus(&eval_s1,&eval_s2),
+                    TokenType::Plus => statement_evals::binop::plus(&eval_s1,&eval_s2),
+                    TokenType::Minus => statement_evals::binop::minus(&eval_s1,&eval_s2),
+                    TokenType::Star => statement_evals::binop::star(&eval_s1,&eval_s2),
+                    TokenType::Slash => statement_evals::binop::slash(&eval_s1,&eval_s2),
+                    TokenType::Carrot => statement_evals::binop::carrot(&eval_s1,&eval_s2),
+                    TokenType::Percent => statement_evals::binop::percent(&eval_s1,&eval_s2),
+                    TokenType::DoublePeriod => statement_evals::binop::double_period(&eval_s1,&eval_s2),
+                    TokenType::LessThan |
+                    TokenType::LessEqual |
+                    TokenType::GreaterThan |
+                    TokenType::GreaterEqual |
+                    TokenType::EqualEqual |
+                    TokenType::NotEqual |
+                    TokenType::And |
+                    TokenType::Or |
                     _ => Err(format_err!("{} is not a binary operator",op)),
                 }
             },
@@ -109,10 +123,35 @@ impl Statement {
         }
     }
 
+    pub fn cast_to_number(&self) -> Option<f32> {
+        if self.is_number() { 
+            return Some(self.as_number().clone()); 
+        }
+        
+        if self.is_string() { 
+            return match self.as_string().parse::<f32>() {
+                Err(_) => None,
+                Ok(float) => Some(float), 
+            };
+        }
+
+        None
+    }
+
     pub fn get_code_slice(&self) -> CodeSlice {
         match self {
             Statement::Token(ref token) => token.get_code_slice().clone(),
             _ => CodeSlice::empty(),
+        }
+    }
+
+    pub fn as_string<'a>(&'a self) -> &'a str {
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::String(string) => string,
+                _ => panic!("Cannot unwrap {:?} as a string",self),
+            },
+            _ => panic!("Cannot unwrap {:?} as a string",self),
         }
     }
 
@@ -124,6 +163,15 @@ impl Statement {
 
         match self {
             Statement::Token(t) => t.get_type() == &token,
+            _ => false,
+        }
+    }
+
+    pub fn is_a_token(&self) -> bool {
+        //! checks if is a token and of that type
+
+        match self {
+            Statement::Token(t) => true,
             _ => false,
         }
     }
@@ -339,6 +387,18 @@ impl Statement {
         match self {
             Statement::Token(ref token) => match token.get_type() {
                 TokenType::Number(_) => true,
+                _ => false,
+            },
+            _ => false,
+        }
+    }
+
+    pub fn is_string(&self) -> bool {
+        //! checking if its a number
+        
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::String(_) => true,
                 _ => false,
             },
             _ => false,
