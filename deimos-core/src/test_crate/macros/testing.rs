@@ -16,3 +16,10 @@ macro_rules! assert_float {
         }
     });
 }
+
+#[macro_export]
+macro_rules! print_em {
+    ($left:expr) => ({
+        println!("{}",$left);
+    });
+}

@@ -4,6 +4,7 @@ use crate::scanner::Scanner;
 use crate::elements::Chunk;
 use crate::elements::Statement;
 use crate::elements::TokenType;
+use crate::elements::Token;
 use crate::elements::CodeSlice;
 
 enum InternalError {
@@ -58,7 +59,6 @@ impl<'a> Parser<'a> {
         let mut chunks : Vec<Chunk> = Vec::new();
 
         // TODO : need to actually process the chunks, make different chunks
-        // FIX : what
         match Parser::process_statements(raw_statements) {
             // error handling
             Err(error) => Err(format_err!("{}",error.render(&raw_code))),
@@ -113,6 +113,10 @@ impl<'a> Parser<'a> {
                         Option3::Skip
                     }
                 },
+                TokenType::Function => {
+                    let function_statement = Parser::collapse_function(&mut raw_statements)?;
+                    Option3::Some(function_statement)
+                },
                 TokenType::Do => {
                     let do_statement = Parser::collapse_block_statement(&mut raw_statements,TokenType::Do)?;
                     Option3::Some(do_statement)
@@ -120,11 +124,6 @@ impl<'a> Parser<'a> {
                 TokenType::While => {
                     let while_statement = Parser::collapse_block_statement(&mut raw_statements, TokenType::While)?;
                     Option3::Some(while_statement)
-                },
-                TokenType::Equal => {
-                    let assignment_statement = Parser::collapse_assignment(&mut raw_statements, statement)?;
-                    statement = Vec::new();
-                    Option3::Some(assignment_statement)
                 }
                 _ => Option3::None,
             };
@@ -140,7 +139,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn collapse_assignment(mut raw_statements : &mut Vec<Statement>,mut statement : Vec<Statement>) -> Result<Statement,InternalError> {
+    fn collapse_assignment(mut before : Vec<Statement>, after : Vec<Statement>) -> Result<Statement,InternalError> {
         //! processess the assignment statement format, is triggered when a '=' is found.
         //! 
         //! checks the following validations when creating the assignment
@@ -154,62 +153,144 @@ impl<'a> Parser<'a> {
         //!     [x]    namelist ::= Name {`,´ Name}
         //! 
         //! ```
+
+        let local = Parser::contains_token(&before, TokenType::Local);
+        Parser::remove_token(&mut before, TokenType::Local);
+
+        let before_list : Statement = { 
+            let mut new_list : Vec<Box<Statement>> = Vec::new();
+            for b in before { new_list.push(Box::new(b)); } 
+            Statement::create_list(new_list)
+        };
+
+        // checking each element making sure its the right stuff
+        match local {
+            false => {
+                // if it is not a local, then the left can be a varlist / var
+                if !before_list.is_varlist() {
+                    return Err(InternalError::SyntaxMsg("Left side of '=' must be a var".to_string(), before_list.get_code_slice()))
+                }
+            },
+            true => {
+                // if it is local then it must be a namelist, not a varlist.  
+                if !before_list.is_namelist() {
+                    return Err(InternalError::SyntaxMsg("Left side of a local '=' must be a name".to_string(), before_list.get_code_slice()))
+                }
+            }
+        }
+
+        // splits the expressions by ',' and the collapses each piece.
+        let expr_list = {
+            let mut list : Vec<Statement> = Vec::new();
+            let splits_list = Parser::split_by_token(after, TokenType::Comma);
+            for split in splits_list {
+                let expr : Statement = Parser::collapse_statement(split)?;
+
+                // checking each element making sure its an expr statement
+                if !expr.is_expr() {
+                    return Err(InternalError::SyntaxMsg("Right side of '=' must be a expr statement".to_string(), expr.get_code_slice()))
+                }
+                list.push(expr);
+            }
+            list
+        };
+
+        let assignment = Statement::create_assignment(before_list,expr_list,local);
+        Ok(assignment)
+    }
+
+    fn collapse_function(mut raw_statements : &mut Vec<Statement>) -> Result<Statement,InternalError> { 
+        //! reads the stream and collects the function, will collapse the interals of the function if
+        //! required to
         
+        let mut function_body : Vec<Box<Statement>> = Vec::new();
+        let mut arguements : Vec<Token> = Vec::new();
+        let mut working_statement : Vec<Statement> = Vec::new();
 
-        let local = Parser::contains_token(&statement, TokenType::Local);
-        Parser::remove_token(&mut statement, TokenType::Local);
+        let name : Option<String> = {
+            match Parser::consume_until_token(&mut raw_statements, TokenType::LeftParen, false) {
+                Err(code_slice) => return Err(InternalError::Syntax(code_slice)),
+                Ok(toks) => {
+                    if toks.len() == 1 {
+                        Some(toks[0].as_name().to_string())
+                    } else {
+                        None
+                    }
+                }
+            }
+        };
 
-        match Parser::consume_until_token(&mut raw_statements, TokenType::EOL, false) {
-            Err(code_slice) => Err(InternalError::SyntaxMsg("Failed to find EOL".to_string(),code_slice)),
-            Ok(exprs) => {
-
-                // splits the vars by ',' and the collapses each piece.
-                let var_list = {
-                    let mut list : Vec<Statement> = Vec::new();
-                    let splits_list = Parser::split_by_token(statement, TokenType::Comma);
-                    for split in splits_list {
-                        let stat : Statement = Parser::collapse_statement(split)?;
-
-                        // checking each element making sure its the right stuff
-                        match local {
-                            false => {
-                                // if it is not a local, then the left can be a varlist / var
-                                if !stat.is_var() {
-                                    return Err(InternalError::SyntaxMsg("Left side of '=' must be a var".to_string(), stat.get_code_slice()))
-                                }
-                            },
-                            true => {
-                                // if it is local then it must be a namelist, not a varlist.  
-                                if !stat.is_name() {
-                                    return Err(InternalError::SyntaxMsg("Left side of a local '=' must be a name".to_string(), stat.get_code_slice()))
-                                }
+        
+        let arguements : Vec<String> = {
+            match Parser::consume_until_token(&mut raw_statements, TokenType::RightParen, false) {
+                Err(code_slice) => return Err(InternalError::Syntax(code_slice)),
+                Ok(toks) => {
+                    let mut names : Vec<String> = Vec::new();
+                    for i in 0 .. toks.len() {
+                        // starts with 0, so that means 0 is even, confusing because you think
+                        // that the first arguement is 1 ...
+                        if i % 2 == 1 {
+                            // is odd, must be a comma
+                            if !toks[i].is_token(TokenType::Comma){
+                                return Err(InternalError::SyntaxMsg("Function arguements must be separated with a comma".to_string(), toks[i].get_code_slice()));
+                            } 
+                        } else {
+                            // is even, is the identifier
+                            match toks[i].is_name() {
+                                true => names.push(toks[i].as_name().to_string()),
+                                false => return Err(InternalError::SyntaxMsg("Function arguements in a definition can only be names".to_string(),toks[i].get_code_slice())),
                             }
                         }
-                        list.push(stat);
                     }
-                    list
-                };
+                    names
+                }
+            }
+        };
 
-                // splits the expressions by ',' and the collapses each piece.
-                let expr_list = {
-                    let mut list : Vec<Statement> = Vec::new();
-                    let splits_list = Parser::split_by_token(exprs, TokenType::Comma);
-                    for split in splits_list {
-                        let expr : Statement = Parser::collapse_statement(split)?;
-
-                        // checking each element making sure its an expr statement
-                        if !expr.is_expr() {
-                            return Err(InternalError::SyntaxMsg("Right side of '=' must be a expr statement".to_string(), expr.get_code_slice()))
-                        }
-                        list.push(expr);
+        loop {
+            let token = raw_statements.remove(0);
+            match token.as_token_type() {
+                TokenType::End => {
+                    if working_statement.len() > 0 {
+                        function_body.push(Box::new(Parser::collapse_statement(working_statement)?));
                     }
-                    list
-                };
-
-                let assignment = Statement::create_assignment(var_list,expr_list,local);
-                Ok(assignment)
-            },
+                    break;
+                },
+                TokenType::EOL => {
+                    if working_statement.len() > 0 {
+                        function_body.push(Box::new(Parser::collapse_statement(working_statement)?));
+                        working_statement = Vec::new();
+                    }
+                },
+                _ => {
+                    working_statement.push(token);
+                }
+            }
         }
+
+        match name {
+            Some(name) => Ok(Statement::FunctionNamed(name,arguements,function_body)),
+            None => Ok(Statement::Function(arguements,function_body)),
+        }
+    }
+
+    fn collapse_return_statement(working_statement : Vec<Statement>) -> Result<Statement,InternalError> {
+        //! peeks forward to get the correct return statement
+        
+        let statement = {
+            let mut statement = Parser::collapse_statement(working_statement)?;
+            if statement.is_expr() { 
+                statement = Statement::ExprList(vec![Box::new(statement)]);
+            }
+            statement
+        };
+        
+        if statement.is_exprlist() {
+            return Ok(Statement::Return(Box::new(statement)));
+        } else {
+            return Err(InternalError::SyntaxMsg("Return must be an expression list if defined.".to_string(),statement.get_code_slice()));
+        }
+
     }
 
     fn collapse_block_statement(mut raw_statements : &mut Vec<Statement>, starter : TokenType) -> Result<Statement,InternalError> {
@@ -290,6 +371,7 @@ impl<'a> Parser<'a> {
         //! ```
 
         let mut pos = 0;
+        let mut list : Vec<Box<Statement>> = Vec::new();
 
         loop {
             // already a single statement, stop the loop
@@ -309,6 +391,54 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            if statement[pos].is_token(TokenType::Comma) {
+                
+                statement.remove(pos); // removes the comma
+                // takes the token before the comma, and puts it in the list
+                list.push(Box::new(statement.remove(pos-1)));
+
+                pos = pos-1;
+                continue;
+            }
+
+            // checks if it is an assignment
+            if statement[pos].is_token(TokenType::Equal) {
+                statement.remove(pos); // need to remove the equals otherwise we will overflow the stack
+
+                let before : Vec<Statement> = if list.len() > 0 {
+                    list.push(Box::new(statement.remove(pos - 1)));
+                    let mut new_list : Vec<Statement> = if pos > 0 {
+                        statement.drain(0 .. pos - 1).collect()
+                    } else {
+                        Vec::new()
+                    };
+                    new_list.push(Statement::create_list(list));        
+                    new_list        
+                } else {
+                    statement.drain(0 .. pos).collect()
+                };
+
+                let assignment_statement = Parser::collapse_assignment(before, statement)?;
+                return Ok(assignment_statement);
+            }
+
+            if statement[pos].is_token(TokenType::Return) {
+                statement.remove(pos);
+                let mut prestuff : Vec<Statement> = statement.drain(0 .. pos).collect();
+
+                match Parser::consume_until_tokens(&mut statement,&[ TokenType::End,TokenType::EOL,TokenType::While ],false) {
+                    Err(code_slice) => return Err(InternalError::SyntaxMsg("IDK What this error is, but its in a return statement".to_string(),code_slice)),
+                    Ok(slice) => {
+                        let return_statement = Parser::collapse_return_statement(slice)?;
+                        statement.insert(0,return_statement);
+                        for i in (0 .. prestuff.len()).rev() { statement.insert(0,prestuff.remove(i)); }
+
+                        pos = 0;
+                        continue;
+                    }
+                }
+            }
+
             // checks if current statement is a binary operator
             if statement[pos].is_binop() {
                 if Parser::peek_expr_before(pos,&statement) && Parser::peek_expr_after(pos,&statement) {
@@ -324,6 +454,13 @@ impl<'a> Parser<'a> {
             }
 
             pos += 1;
+        }
+
+        if list.len() > 0 {
+            if statement.len() == 1 {                
+                list.push(Box::new(statement.remove(0)));
+                return Ok(Statement::create_list(list));
+            } 
         }
 
         // removes the first element of the list of statements,
@@ -347,29 +484,35 @@ impl<'a> Parser<'a> {
         statement[pos+1].is_expr()
     }
 
-    fn consume_until_token(buffer : &mut Vec<Statement>, desired_token : TokenType, include : bool) -> Result<Vec<Statement>,CodeSlice> {
+    // TODO : remove the result on this function and its other version `consume_until_token`
+    fn consume_until_tokens(buffer : &mut Vec<Statement>, desired_tokens : &[TokenType], include : bool) -> Result<Vec<Statement>,CodeSlice> {
         let mut tokens : Vec<Statement> = Vec::new();
         loop {
-            if buffer.len() <= 0 { 
-                return Err(CodeSlice::create_from(&tokens[0].get_code_slice(),&tokens[tokens.len()-1].get_code_slice())); 
-            }
+            if buffer.len() <= 0 { return Ok(tokens); }
 
             let token = buffer.remove(0);
             
             // checks if the token is the desired token, but if the desired token is EOL then it will also match on EOF token).
-            if token.as_token_type() == &desired_token || (&desired_token == &TokenType::EOL && token.as_token_type() == &TokenType::EOF) {
-                if include { tokens.push(token); }
-                return Ok(tokens);
-            } else {
-                tokens.push(token);
+            for desired_token in desired_tokens {
+                if token.as_token_type() == desired_token || (desired_token == &TokenType::EOL && token.as_token_type() == &TokenType::EOF) {
+                    if include { tokens.push(token); }
+                    return Ok(tokens);
+                }
             }
+            tokens.push(token);
         }
+    }
+
+    fn consume_until_token(buffer : &mut Vec<Statement>, desired_token : TokenType, include : bool) -> Result<Vec<Statement>,CodeSlice> {
+        Parser::consume_until_tokens(buffer, &[desired_token], include)
     }
 
     fn remove_token(buffer : &mut Vec<Statement>, desired_token : TokenType) {
         for i in (0 .. buffer.len()).rev() {
-            if buffer[i].as_token_type() == &desired_token {
-                buffer.remove(i);
+            if buffer[i].is_a_token() {
+                if buffer[i].as_token_type() == &desired_token {
+                    buffer.remove(i);
+                }
             }
         }
     }
@@ -380,7 +523,9 @@ impl<'a> Parser<'a> {
         //! should only be used for Statement::Token(_) so shouldn't panic.
         
         for t in tokens.iter() {
-            if t.as_token_type() == &token_to_look_for { return true; }
+            if t.is_a_token() {
+                if t.as_token_type() == &token_to_look_for { return true; }
+            }
         }
         false
     }
@@ -462,35 +607,35 @@ mod tests {
         // single assignment
         assert_eq!(setup_simple!("bob = 5 + 4").chunks[0],
             chunk!(assignment!(
-                ( statement!("bob") ),
+                ( "bob" ),
                 ( binary!("+","5","4") )
             )));
 
         // single assignment, local
         assert_eq!(setup_simple!("local bob = 5 + 4").chunks[0],
             chunk!(assignment_local!(
-                ( statement!("bob") ),
+                ( "bob" ),
                 ( binary!("+","5","4") )
             )));
 
         // double assignment
         assert_eq!(setup_simple!("bob,linda = 5,4").chunks[0],
             chunk!(assignment!(
-                ( statement!("bob"),statement!("linda") ),
+                ( "bob","linda" ),
                 ( statement!("5"),statement!("4") )
             )));
 
         // double assignment, local
         assert_eq!(setup_simple!("local bob,linda = 5,4").chunks[0],
             chunk!(assignment_local!(
-                ( statement!("bob"),statement!("linda") ),
+                ( "bob","linda" ),
                 ( statement!("5"),statement!("4") )
             )));
 
         // mismatched assignment
         assert_eq!(setup_simple!("bob,linda,jorge = 5 * 4 + 3,false").chunks[0],
             chunk!(assignment!(
-                ( statement!("bob"),statement!("linda"),statement!("jorge") ),
+                ( "bob","linda","jorge" ),
                 ( 
                     binary!("+",
                         s binary!("*","5","4"),
@@ -525,10 +670,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn functions() {
-        // TODO : figure out a better way to pair the code with the macro function, 
-        // maybe an external crate that contains all of it?
 
         let function_def = setup_simple!("
         function test(a,b,c)
@@ -538,15 +680,18 @@ mod tests {
         ");
 
         let check_against = chunk!(function!(
-            (statement!("a"),statement!("b"),statement!("c")),
+            "test",("a","b","c"),
             assignment_local!(
-                ( statement!("temp") ),
+                ( "temp" ),
                 ( binary!("+","a","b") )
             ),
             return_stat!(
                 binary!("*","c","temp")
             )
         ));
+
+        print_em!(function_def.chunks[0]);
+        print_em!(check_against);
 
         assert_eq!(function_def.chunks[0],check_against);
     }

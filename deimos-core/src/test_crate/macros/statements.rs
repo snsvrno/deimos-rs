@@ -84,17 +84,43 @@ macro_rules! empty {
     });
 }
 
+#[macro_export]
+macro_rules! namelist {
+    ($($statement:expr),*) => ({
+        let mut list : Vec<String> = Vec::new();
+
+        $(
+            list.push($statement);
+        )*
+
+        crate::elements::Statement::NameList(list)
+    });
+}
+
+#[macro_export]
+macro_rules! varlist {
+    ($($statement:expr),*) => ({
+        let mut list : Vec<Box<crate::elements::Statement>> = Vec::new();
+
+        $(
+            list.push(Box::new($statement));
+        )*
+
+        crate::elements::Statement::VarList(list)
+    });
+}
+
 
 #[macro_export]
 macro_rules! assignment {
     (($($var:expr),*),($($exprs:expr),*)) => ({
-        crate::elements::Statement::Assignment(list!($($var),*),list!($($exprs),*))
+        crate::elements::Statement::Assignment(Box::new(namelist!($($var.to_string()),*)),list!($($exprs),*))
     });
 }
 #[macro_export]
 macro_rules! assignment_local {
     (($($var:expr),*),($($exprs:expr),*)) => ({
-        crate::elements::Statement::AssignmentLocal(list!($($var),*),list!($($exprs),*))
+        crate::elements::Statement::AssignmentLocal(Box::new(namelist!($($var.to_string()),*)),list!($($exprs),*))
     });
 }
 
@@ -108,13 +134,17 @@ macro_rules! statement {
 #[macro_export]
 macro_rules! function {
     (($($par:expr),*), $($stat:expr),*) => ({
-        crate::elements::Statement::Function(list!($($par),*),list!($($stat),*))
+        crate::elements::Statement::Function(vec![$($par.to_string()),*],list!($($stat),*))
+    });
+
+    ($name:expr, ($($par:expr),*), $($stat:expr),*) => ({
+        crate::elements::Statement::FunctionNamed($name.to_string(),vec![$($par.to_string()),*],list!($($stat),*))
     });
 }
 
 #[macro_export]
 macro_rules! return_stat {
     ($($exprs:expr),*) => ({
-        crate::elements::Statement::Return(list!($($exprs),*))
+        crate::elements::Statement::Return(Box::new(crate::elements::Statement::ExprList(list!($($exprs),*))))
     });
 }

@@ -5,10 +5,12 @@ use failure::Error;
 
 mod elements;
 mod scanner; use crate::scanner::Scanner;
-mod parser;
-mod eval;
+mod parser; use crate::parser::Parser;
+mod eval; use crate::eval::Eval;
 
-pub fn scan(code : &str) -> Result<Scanner,Error> {
+pub fn evaluate(code : &str) -> Result<Eval,Error> {
     let scanner = Scanner::init(code).scan()?;
-    Ok(scanner)
+    let parser = Parser::from_scanner(scanner)?;
+    let evaluated = Eval::from_parser(parser)?;
+    Ok(evaluated)
 }

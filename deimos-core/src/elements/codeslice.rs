@@ -35,6 +35,10 @@ impl CodeSlice {
     }
 
     pub fn create_from(slice1 : &CodeSlice, slice2 : &CodeSlice) -> CodeSlice {
+        if slice1.abs_start > slice2.abs_end {
+            panic!("Failty code slice? trying to make a slice from these two:\n   first: {:?}\n   second: {:?}",slice1,slice2);
+        }
+
         CodeSlice {
             abs_start : slice1.abs_start,
             abs_end : slice2.abs_end,
