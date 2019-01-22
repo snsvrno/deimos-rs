@@ -1,0 +1,9 @@
+[package]
+name = "deimos"
+version = "0.1.0"
+authors = ["snsvrno <snsvrno@tuta.io>"]
+edition = "2018"
+
+[dependencies]
+failure = "0.1"
+deimos-core = { version = "0.1.0", path = "../deimos-core/"}
