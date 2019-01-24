@@ -30,12 +30,13 @@ pub enum Statement {
     DoEnd(Vec<Box<Statement>>),
     WhileDoEnd(Box<Statement>,Vec<Box<Statement>>),
 
-    Assignment(Box<Statement>,Vec<Box<Statement>>),                      // varlist `=´ explist
-    AssignmentLocal(Box<Statement>,Vec<Box<Statement>>),                 // local namelist [`=´ explist] 
+    Assignment(Box<Statement>,Box<Statement>),                 // varlist `=´ explist
+    AssignmentLocal(Box<Statement>,Box<Statement>),            // local namelist [`=´ explist] 
 
     Function(Vec<String>,Vec<Box<Statement>>),                      // funcbody ::= `(´ [parlist] `)´ block end
     FunctionNamed(String,Vec<String>,Vec<Box<Statement>>),          // funcbody ::= name`(´ [parlist] `)´ block end
-    Return(Box<Statement>),                                              // laststat ::= return [explist] | break
+    FunctionCall(Box<Statement>,Box<Statement>),                       
+    Return(Box<Statement>),                                         // laststat ::= return [explist] | break
 }
 
 impl Statement {
@@ -79,7 +80,7 @@ impl Statement {
             },
             Statement::Assignment(ref vars,exprs) => {
                 let mut results : Vec<Statement> = Vec::new();
-                for ex in exprs.iter() {
+                for ex in exprs.as_list() {
                     results.push(ex.eval(&mut scope)?);
                 }
 
@@ -192,6 +193,23 @@ impl Statement {
         None
     }
 
+    fn into_varlist(self) -> Statement {
+        //! turns a namelist into a var list
+        //! will panic
+         
+        if !self.is_namelist() {
+            panic!("Can only change a namelist into a varlist, not sure how to do it for {}",self);
+        }
+
+        let mut items : Vec<Box<Statement>> = Vec::new();
+        let code_slice = self.get_code_slice();
+        for i in self.as_namelist() {
+            let token = Statement::Token(Token::new(TokenType::Identifier(i.to_string()),code_slice.clone()));
+            items.push(Box::new(token));
+        }
+        Statement::VarList(items)
+    }
+
     pub fn get_code_slice(&self) -> CodeSlice {
         // TODO : implement this for all the other types.
         match self {
@@ -230,6 +248,29 @@ impl Statement {
             Statement::Token(t) => t.get_type() == &token,
             _ => false,
         }
+    }
+
+    pub fn is_args(&self) -> bool {
+        //!
+        //! 
+        //! ```text
+        //! 
+        //!     [x]     `(´ [explist] `)´ | 
+        //!     [ ]     tableconstructor | 
+        //!     [x]     String 
+        //! 
+        //! ```
+
+        if self.is_string() { return true; }
+        if self.is_exprlist() { return true; }
+
+        false 
+    }
+
+    pub fn is_a_list(&self) -> bool {
+        self.is_varlist() || 
+        self.is_exprlist() ||
+        self.is_namelist()
     }
 
     pub fn is_exprlist(&self) -> bool {
@@ -282,6 +323,26 @@ impl Statement {
 
         match self {
             Statement::Token(t) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_prefixexp(&self) -> bool {
+        //! checks if a prefixexpression
+        //! 
+        //! ```text
+        //! 
+        //!     [x]     var |
+        //!     [x]     functioncall |
+        //!     [x]     `(´ exp `)´
+        //! 
+        //! ```
+        
+        if self.is_expr() { return true; }
+        if self.is_var() { return true; }
+        
+        match self {
+            Statement::FunctionCall(_,_) => true,
             _ => false,
         }
     }
@@ -695,12 +756,44 @@ impl Statement {
         Statement::ExprList(items)
     }
 
-    pub fn create_assignment(mut vars: Statement, mut exprs : Vec<Statement>, local : bool) -> Statement {
+    pub fn add_to_list(mut self, item : Statement) -> Option<Self> {
+        //! adds an item to a list, if a list. will not panic if not a list, instead will
+        //! return a false.
+        //!
+        //! needs to be able to transform the list to another type if possible.
+        
+        // all the clean additions
+        if !self.is_a_list() { return None; }
+
+        if self.is_namelist() && item.is_name() {
+            self.as_namelist_mut().push(item.as_name().to_string());
+            return Some(self);
+        }
+
+        if ( self.is_varlist() && item.is_var() ) || ( self.is_exprlist() && item.is_expr()  ) {
+            self.as_list_mut().push(Box::new(item));
+            return Some(self);
+        }
+
+        // require some transformation
+        if self.is_namelist() && item.is_var() {
+            let mut var_list = self.into_varlist();
+            var_list.as_list_mut().push(Box::new(item));
+            self = var_list;
+            return Some(self);
+        }
+
+        None
+    }
+
+    pub fn create_assignment(mut vars: Statement, mut exprs : Statement, local : bool) -> Statement {
         // gets the two lists the same length
         loop {
             if vars.len() == exprs.len() { break; }
             match vars.len() > exprs.len() {
-                true => exprs.push(Statement::Empty),
+                true => {
+                    exprs.as_list_mut().push(Box::new(Statement::Empty));
+                },
                 false => {
                     if vars.is_namelist() {
                         vars.as_namelist_mut().push("_".to_string());
@@ -716,8 +809,8 @@ impl Statement {
         }
 
         match local {
-            true => Statement::AssignmentLocal(Box::new(vars),Statement::convert_to_box_list(exprs)),
-            false => Statement::Assignment(Box::new(vars),Statement::convert_to_box_list(exprs))
+            true => Statement::AssignmentLocal(Box::new(vars),Box::new(exprs)),
+            false => Statement::Assignment(Box::new(vars),Box::new(exprs))
         }
     }
 
@@ -802,9 +895,10 @@ impl std::fmt::Display for Statement {
             Statement::DoEnd(stats) => write!(f,"(do {} end)",Statement::render_statements(&stats)),
             Statement::WhileDoEnd(expr,stats) => write!(f,"(while {} do {} end)",expr,Statement::render_statements(&stats)),
 
-            Statement::Assignment(varlist,exprlist) => write!(f,"(= {} {})",&varlist,Statement::render_list(&exprlist)),
-            Statement::AssignmentLocal(varlist,exprlist) => write!(f,"(= local {} {})",&varlist,Statement::render_list(&exprlist)),
+            Statement::Assignment(varlist,exprlist) => write!(f,"(= {} {})",&varlist,&exprlist),
+            Statement::AssignmentLocal(varlist,exprlist) => write!(f,"(= local {} {})",&varlist,&exprlist),
             
+            Statement::FunctionCall(name,args) => write!(f,"({}() {})",name,&args),
             Statement::Function(args,body) => write!(f,"(fn<{}> {} end)",Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::FunctionNamed(name,args,body) => write!(f,"(fn {}<{}> {} end)",name,Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::Return(list) => write!(f,"(return {})",&list),

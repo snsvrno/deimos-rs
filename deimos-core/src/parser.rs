@@ -180,20 +180,24 @@ impl<'a> Parser<'a> {
         }
 
         // splits the expressions by ',' and the collapses each piece.
-        let expr_list = {
-            let mut list : Vec<Statement> = Vec::new();
-            let splits_list = Parser::split_by_token(after, TokenType::Comma);
-            for split in splits_list {
-                let expr : Statement = Parser::collapse_statement(split)?;
-
-                // checking each element making sure its an expr statement
-                if !expr.is_expr() {
-                    return Err(InternalError::SyntaxMsg("Right side of '=' must be a expr statement".to_string(), expr.get_code_slice()))
+        let expr_list : Statement = { 
+            
+            let potential_list = Parser::collapse_statement(after)?;
+            if potential_list.is_a_list() {
+                if !potential_list.is_exprlist() {
+                    return Err(InternalError::SyntaxMsg("Right side of '=' must be an expression".to_string(), potential_list.get_code_slice()));
                 }
-                list.push(expr);
+                potential_list
+                // else its a exprlist and good to go.
+            } else {
+                // need to convert it to a list.
+                let list = Statement::create_list(vec![Box::new(potential_list)]);
+                if !list.is_exprlist() {
+                    return Err(InternalError::SyntaxMsg("Right side of '=' must be an expression".to_string(), list.get_code_slice()));
+                }
+                list
             }
-            list
-        };
+      };
 
         let assignment = Statement::create_assignment(before_list,expr_list,local);
         Ok(assignment)
@@ -204,7 +208,6 @@ impl<'a> Parser<'a> {
         //! required to
         
         let mut function_body : Vec<Box<Statement>> = Vec::new();
-        let mut arguements : Vec<Token> = Vec::new();
         let mut working_statement : Vec<Statement> = Vec::new();
 
         let name : Option<String> = {
@@ -371,7 +374,7 @@ impl<'a> Parser<'a> {
         //! ```
 
         let mut pos = 0;
-        let mut list : Vec<Box<Statement>> = Vec::new();
+        //let mut list : Vec<Box<Statement>> = Vec::new();
 
         loop {
             // already a single statement, stop the loop
@@ -392,10 +395,46 @@ impl<'a> Parser<'a> {
             }
 
             if statement[pos].is_token(TokenType::Comma) {
-                
-                statement.remove(pos); // removes the comma
-                // takes the token before the comma, and puts it in the list
-                list.push(Box::new(statement.remove(pos-1)));
+                if pos == 0 { return Err(InternalError::General("Error collapsing statement, comma not where it should be.".to_string())); }
+
+                let prefix : Option<Vec<Statement>> = if pos >= 2 {
+                    let mut prefix : Vec<Statement> = Vec::new();
+                    for i in (0 .. pos-1).rev() {
+                        prefix.insert(0,statement.remove(i));
+                    }
+                    Some(prefix)
+                } else { None };
+
+                let pre = statement.remove(0); // removes the statement before
+                statement.remove(0); // removes the token
+                let post = match Parser::consume_until_tokens_with_grouping(&mut statement, &[TokenType::Comma, TokenType::RightParen, TokenType::EOL, TokenType::Equal] , false) {
+                    Err(_) => panic!("parsing comma phrase, can't find the end of the comma group"),
+                    Ok(post) => {
+                        println!("{:?}",post);
+                        Parser::collapse_statement(post)?
+                    }
+                };
+
+                let list : Option<Statement> = match pre.is_a_list() {
+                    true => {
+                        pre.add_to_list(post)
+                    },
+                    false => {
+                        let new_list = Statement::create_list(vec![ Box::new(pre), Box::new(post)]);
+                        Some(new_list)
+                    },
+                };
+
+                match list {
+                    Some(list) => statement.insert(0,list),
+                    None => return Err(InternalError::SyntaxMsg("Can't have a list of different types".to_string(),statement[0].get_code_slice())), 
+                }
+
+                if let Some(mut prefix) = prefix {
+                    for i in (0 .. prefix.len()).rev() {
+                        statement.insert(0,prefix.remove(i));
+                    }
+                }
 
                 pos = pos-1;
                 continue;
@@ -405,21 +444,37 @@ impl<'a> Parser<'a> {
             if statement[pos].is_token(TokenType::Equal) {
                 statement.remove(pos); // need to remove the equals otherwise we will overflow the stack
 
-                let before : Vec<Statement> = if list.len() > 0 {
-                    list.push(Box::new(statement.remove(pos - 1)));
-                    let mut new_list : Vec<Statement> = if pos > 0 {
-                        statement.drain(0 .. pos - 1).collect()
-                    } else {
-                        Vec::new()
-                    };
-                    new_list.push(Statement::create_list(list));        
-                    new_list        
-                } else {
-                    statement.drain(0 .. pos).collect()
-                };
+                let before : Vec<Statement> = statement.drain(0 .. pos).collect();
 
                 let assignment_statement = Parser::collapse_assignment(before, statement)?;
                 return Ok(assignment_statement);
+            }
+
+            if statement[pos].is_token(TokenType::LeftParen) {
+                // if a parenthesis it could either be a function call, or it could be a grouping.
+
+                match Parser::consume_until_token(&mut statement, TokenType::RightParen, false) {
+                    Err(code_slice) => return Err(InternalError::SyntaxMsg("Could not find the end of the parenthesis".to_string(),code_slice)),
+                    Ok(insides) => {
+                        // checking if its a function call
+                        if pos >= 1 {
+                            // TODO : need to add stuff for bob.func() and bob:func()
+                            if statement[pos-1].is_prefixexp() {
+                                let function_identifier = statement.remove(pos-1);
+                                let insides_collapsed = Parser::collapse_statement(insides)?;
+                                if !insides_collapsed.is_args() {
+                                    return Err(InternalError::SyntaxMsg("Function call requires arguements".to_string(),insides_collapsed.get_code_slice()));
+                                }
+                                let funccal = Statement::FunctionCall(Box::new(function_identifier),Box::new(insides_collapsed));
+                                statement.insert(pos-1,funccal);
+                            }
+                        }
+                        
+
+                        pos = 0;
+                        continue;
+                    }
+                }
             }
 
             if statement[pos].is_token(TokenType::Return) {
@@ -454,13 +509,6 @@ impl<'a> Parser<'a> {
             }
 
             pos += 1;
-        }
-
-        if list.len() > 0 {
-            if statement.len() == 1 {                
-                list.push(Box::new(statement.remove(0)));
-                return Ok(Statement::create_list(list));
-            } 
         }
 
         // removes the first element of the list of statements,
@@ -503,8 +551,43 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn consume_until_tokens_with_grouping(buffer : &mut Vec<Statement>, desired_tokens : &[TokenType], consume_desired : bool) ->  Result<Vec<Statement>,CodeSlice> {
+        let mut tokens : Vec<Statement> = Vec::new();
+        let mut depth = 0;
+        loop {
+            if buffer.len() <= 0 { return Ok(tokens); }
+
+            let token = buffer.remove(0);
+
+            if token.as_token_type() == &TokenType::LeftParen {
+                tokens.push(token);
+                depth += 1;
+                continue;
+            } else if token.as_token_type() == &TokenType::RightParen {
+                if depth >= 0 {
+                    tokens.push(token);
+                    depth -= 1;
+                    continue;
+                }
+            }
+
+            // checks if the token is the desired token, but if the desired token is EOL then it will also match on EOF token).
+            for desired_token in desired_tokens {
+                if token.as_token_type() == desired_token || (desired_token == &TokenType::EOL && token.as_token_type() == &TokenType::EOF) {
+                    if !consume_desired { buffer.insert(0,token); } 
+                    return Ok(tokens);
+                }
+            }
+            tokens.push(token);
+        }
+    }
+
     fn consume_until_token(buffer : &mut Vec<Statement>, desired_token : TokenType, include : bool) -> Result<Vec<Statement>,CodeSlice> {
         Parser::consume_until_tokens(buffer, &[desired_token], include)
+    }
+
+    fn consume_until_token_with_grouping(buffer : &mut Vec<Statement>, desired_token : TokenType, consume_desired : bool) -> Result<Vec<Statement>,CodeSlice> {
+        Parser::consume_until_tokens_with_grouping(buffer, &[desired_token], consume_desired)
     }
 
     fn remove_token(buffer : &mut Vec<Statement>, desired_token : TokenType) {
@@ -670,6 +753,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn functions() {
 
         let function_def = setup_simple!("
@@ -677,18 +761,27 @@ mod tests {
             local temp = a + b
             return c * temp
         end
+        result = test(1,2,3)
         ");
 
-        let check_against = chunk!(function!(
-            "test",("a","b","c"),
-            assignment_local!(
-                ( "temp" ),
-                ( binary!("+","a","b") )
+        let check_against = chunk!(
+            function!(
+                "test",("a","b","c"),
+                assignment_local!(
+                    ( "temp" ),
+                    ( binary!("+","a","b") )
+                ),
+                return_stat!(
+                    binary!("*","c","temp")
+                )
             ),
-            return_stat!(
-                binary!("*","c","temp")
+            assignment!(
+                ( "result" ),
+                (function_call!("test", 
+                    ( statement!("1"), statement!("2"), statement!("3")) 
+                ))
             )
-        ));
+        );
 
         print_em!(function_def.chunks[0]);
         print_em!(check_against);
