@@ -44,7 +44,18 @@ mod tests {
         assert_eq!(&10_f32, eval.get_value("c").unwrap().as_number());
         assert_eq!(&3_f32, eval.get_value("d").unwrap().as_number());
         assert_eq!("a string here", eval.get_value("e").unwrap().as_string());
-        
+    }
+
+    #[test]
+    fn unaryops() {
+        let code = include_str!("../../lua/basic/unaryops.lua");
+        let eval = setup_eval!(&code);
+
+        assert_eq!(&-5_f32, eval.get_value("a").unwrap().as_number());
+        assert_eq!(&-100.23,eval.get_value("b").unwrap().as_number());
+        assert_eq!(&5_f32, eval.get_value("c").unwrap().as_number());
+        assert_eq!(false, eval.get_value("d").unwrap().as_bool());
+        assert_eq!(true, eval.get_value("e").unwrap().as_bool());
     }
 
     #[test]
@@ -64,5 +75,15 @@ mod tests {
         assert_eq!("34", eval.get_value("g1").unwrap().as_string());
         assert_eq!("asmb", eval.get_value("g2").unwrap().as_string());
         assert_eq!(&15_f32, eval.get_value("h").unwrap().as_number());
+    }
+
+    #[test]
+    #[ignore]
+    fn functions() {
+        let code = include_str!("../../lua/basic/functions.lua");
+        let eval = setup_eval!(&code);
+        
+        assert_eq!(&4_f32, eval.get_value("var1").unwrap().as_number());
+        assert_eq!(&9_f32, eval.get_value("var2").unwrap().as_number());
     }
 }

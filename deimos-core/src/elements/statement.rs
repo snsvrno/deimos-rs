@@ -56,6 +56,15 @@ impl Statement {
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         match self {
+            Statement::Unary(op,s1) => {
+                let eval_s1 = s1.eval(&mut scope)?;
+                match op.get_type() {
+                    TokenType::Minus => statement_evals::unop::minus(&eval_s1),
+                    TokenType::Not => statement_evals::unop::not(&eval_s1),
+                    TokenType::Pound |
+                    _ => Err(format_err!("{} is not a unary operator", op)),
+                }
+            },
             Statement::Binary(op,s1,s2) => {
                 let eval_s1 = s1.eval(&mut scope)?;
                 let eval_s2 = s2.eval(&mut scope)?;
@@ -148,6 +157,17 @@ impl Statement {
         }
     }
 
+    pub fn as_bool(&self) -> bool {
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::False => false,
+                TokenType::True => true,
+                _ => panic!("Cannot unwrap {:?} as a bool", self),
+            },
+            _ => panic!("Cannot unwrap {:?} as a bool", self),
+        }
+    }
+
     pub fn as_list<'a>(&'a self) -> &'a Vec<Box<Statement>> {
         match self {
             Statement::VarList(ref list) => &list,
@@ -176,6 +196,14 @@ impl Statement {
             Statement::ExprList(ref mut list) => list,
             _ => panic!("Cannot unwrap {:?} as a mut list",self),
         }
+    }
+
+    pub fn cast_to_bool(&self) -> Option<bool> {
+        if self.is_bool() {
+            return Some(self.as_bool().clone());
+        }
+
+        None
     }
 
     pub fn cast_to_number(&self) -> Option<f32> {
@@ -247,6 +275,14 @@ impl Statement {
         match self {
             Statement::Token(t) => t.get_type() == &token,
             _ => false,
+        }
+    }
+    
+    pub fn is_bool(&self) -> bool {
+        if self.is_token(TokenType::False) || self.is_token(TokenType::True) {
+            true
+        } else {
+            false
         }
     }
 
@@ -909,7 +945,7 @@ impl std::fmt::Display for Statement {
 }
 
 #[cfg(test)]
-mod tests {
+mod spec {
 
     use crate::test_crate::*;
 

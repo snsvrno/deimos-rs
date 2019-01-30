@@ -1,4 +1,31 @@
 
+pub mod unop {
+    use failure::{format_err, Error};
+    use crate::elements:: { Statement, Token, TokenType, CodeSlice };
+
+    pub fn minus(s1 : &Statement) -> Result<Statement,Error> {
+        if let Some(a) = s1.cast_to_number() {
+            return Ok(Statement::Token(Token::new(
+                TokenType::Number(a * -1.0),
+                s1.get_code_slice().clone()
+            )));
+        }
+
+        Err(format_err!("Don't know how to do '- {}'",s1))
+    }
+
+    pub fn not(s1 : &Statement) -> Result<Statement,Error> {
+        if let Some(a) = s1.cast_to_bool() {
+            let token = if a { TokenType::False } else { TokenType::True };
+            return Ok(Statement::Token(Token::new(
+                token,
+                s1.get_code_slice().clone()
+            )));
+        }
+
+        Err(format_err!("Don't know how to do 'not {}'",s1))
+    }
+}
 
 pub mod binop {
     use failure::{Error,format_err};
