@@ -54,8 +54,65 @@ impl Statement {
         statements
     }
 
+    pub fn eval_as_function(&self, mut scope : &mut Scope, arg : &Statement) -> Result<Statement,Error> {
+        match self {
+            Statement::Function(ref args, ref content) => {
+                // sets all the arguements
+                scope.push_local();
+                for i in 0 .. args.len() {
+                    let value : Statement = if let Some(value) = arg.as_list_index(i) {
+                        value.clone()
+                    } else {
+                        Statement::Empty
+                    };
+                    scope.assign_local(&args[i],value);
+                }
+
+                let mut returned = Statement::Empty;
+                
+                // evaluating the function
+                for line in content.iter() {
+                    let result = line.eval(&mut scope)?;
+                    if let Statement::Return(result) = result {
+                        returned = *result;                        
+                        break;
+                    }
+                }
+
+                scope.pop_local();
+                Ok(returned)
+            },
+            _ => Err(format_err!("Cannot evaluate {} as a function",self)),
+        }
+    }
+
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         match self {
+            Statement::ExprList(ref list) => {
+                let mut new_list : Vec<Box<Statement>> = Vec::new();
+                for i in 0 .. list.len() {
+                    new_list.push(Box::new(list[i].eval(scope)?));
+                }
+                if list.len() == 1 {
+                    Ok(*new_list.remove(0))
+                } else {
+                    Ok(Statement::ExprList(new_list))
+                }
+            },
+            Statement::Return(stat) => {
+                let result = stat.eval(scope)?;
+                Ok(Statement::Return(Box::new(result)))
+            },
+            Statement::FunctionNamed(ref name,ref args,ref content) => {
+                let func =Statement::Function(args.clone(),content.clone());
+                scope.register_function(name,func);
+                Ok(Statement::Empty)
+            },
+            Statement::FunctionCall(ref name,ref args) => {
+                let function = scope.get_function(name.as_name())?.clone();
+                function.eval_as_function(scope,args)
+                // Err(format_err!("FunctionCall isn't implemented"))
+            },
             Statement::Unary(op,s1) => {
                 let eval_s1 = s1.eval(&mut scope)?;
                 match op.get_type() {
@@ -175,6 +232,20 @@ impl Statement {
             _ => panic!("Cannot unwrap {:?} as a list",self),
         }
     }
+
+    pub fn as_list_index<'a>(&'a self, i : usize) -> Option<&'a Statement> {
+        match self {
+            Statement::VarList(ref list) |
+            Statement::ExprList(ref list) => {
+                if list.len() > i {
+                    Some(&list[i])
+                } else { None }
+            },
+            _ => {
+                if i == 0 { Some(&self) } else { None }
+            },
+        }
+    }   
 
     pub fn as_namelist<'a>(&'a self) -> &'a Vec<String> {
         match self {

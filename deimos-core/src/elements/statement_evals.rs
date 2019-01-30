@@ -60,6 +60,7 @@ pub mod binop {
     }
 
     pub fn star(s1 : &Statement, s2 : &Statement) -> Result<Statement,Error> {
+        println!("{} * {}",s1,s2);
         if let Some(a) = s1.cast_to_number() {
             if let Some(b) = s2.cast_to_number() {
                 let result = a * b;

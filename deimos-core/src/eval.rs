@@ -78,7 +78,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn functions() {
         let code = include_str!("../../lua/basic/functions.lua");
         let eval = setup_eval!(&code);

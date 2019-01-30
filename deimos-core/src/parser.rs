@@ -466,9 +466,13 @@ impl<'a> Parser<'a> {
                         if let Some(ref token) = touching_token {
                             if token.is_prefixexp() {
                                 let function_ident = pre_tokens.remove(pre_tokens.len()-1);
-                                let insides_collapsed = Parser::collapse_statement(insides)?;
+                                let insides_collapsed = if insides.len() == 0 { 
+                                    Statement::Empty 
+                                } else { 
+                                    Parser::collapse_statement(insides)?
+                                };
                                 
-                                if !insides_collapsed.is_args() {
+                                if !insides_collapsed.is_args() && insides_collapsed != Statement::Empty {
                                      return Err(InternalError::SyntaxMsg("Function call requires arguements".to_string(),insides_collapsed.get_code_slice()));
                                 }
 
