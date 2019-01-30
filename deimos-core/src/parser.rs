@@ -451,25 +451,38 @@ impl<'a> Parser<'a> {
             }
 
             if statement[pos].is_token(TokenType::LeftParen) {
-                // if a parenthesis it could either be a function call, or it could be a grouping.
 
+                // remove everything before the parenthesis
+                let mut pre_tokens : Vec<Statement> = statement.drain(0 .. pos).collect();
+                let touching_token : Option<&Statement> = if pre_tokens.len() > 0 { Some(&pre_tokens[pre_tokens.len()-1]) } else { None };
+                statement.remove(0); // remove the Left Parenthesis
+
+                // if a parenthesis it could either be a function call, or it could be a grouping.
                 match Parser::consume_until_token(&mut statement, TokenType::RightParen, false) {
                     Err(code_slice) => return Err(InternalError::SyntaxMsg("Could not find the end of the parenthesis".to_string(),code_slice)),
                     Ok(insides) => {
                         // checking if its a function call
-                        if pos >= 1 {
-                            // TODO : need to add stuff for bob.func() and bob:func()
-                            if statement[pos-1].is_prefixexp() {
-                                let function_identifier = statement.remove(pos-1);
+                        // TODO : add stuff for bob.func() and bob:func()
+                        if let Some(ref token) = touching_token {
+                            if token.is_prefixexp() {
+                                let function_ident = pre_tokens.remove(pre_tokens.len()-1);
                                 let insides_collapsed = Parser::collapse_statement(insides)?;
+                                
                                 if !insides_collapsed.is_args() {
-                                    return Err(InternalError::SyntaxMsg("Function call requires arguements".to_string(),insides_collapsed.get_code_slice()));
+                                     return Err(InternalError::SyntaxMsg("Function call requires arguements".to_string(),insides_collapsed.get_code_slice()));
                                 }
-                                let funccal = Statement::FunctionCall(Box::new(function_identifier),Box::new(insides_collapsed));
-                                statement.insert(pos-1,funccal);
+
+                                let funccal = Statement::FunctionCall(Box::new(function_ident),Box::new(insides_collapsed));
+                                
+                                statement.insert(0,funccal);
+                                
+                                // returning the prestuff
+                                for i in (0 .. pre_tokens.len()).rev() {
+                                    statement.insert(0,pre_tokens.remove(i));
+                                }
+                                
                             }
-                        }
-                        
+                        }                       
 
                         pos = 0;
                         continue;
@@ -753,7 +766,7 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    
     fn functions() {
 
         let function_def = setup_simple!("
@@ -761,6 +774,7 @@ mod tests {
             local temp = a + b
             return c * temp
         end
+
         result = test(1,2,3)
         ");
 
