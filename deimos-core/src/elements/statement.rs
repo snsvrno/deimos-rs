@@ -109,21 +109,14 @@ impl Statement {
                 Ok(Statement::Empty)
             },
             Statement::FunctionCall(ref name,ref args) => {
-                match scope.eval_stdlib_function(&name.as_name(),&args){
+                /*match scope.eval_stdlib_function(&name.as_name(),&args){
                     Some(result) => result,
                     None => {
                         let function = scope.get_function(name.as_name())?.clone();
                         function.eval_as_function(scope,args)
                     },
-                }
-                /*match scope.eval_stdlib_function(name.as_name(),args) {
-                    Some(result) => Ok(result),
-                    None => {
-                        let function = scope.get_function(name.as_name())?.clone();
-                        function.eval_as_function(scope,args)
-                    }
-                */
-                // Err(format_err!("FunctionCall isn't implemented"))
+                }*/
+                scope.eval_function(&name.as_name(),&args)
             },
             Statement::Unary(op,s1) => {
                 let eval_s1 = s1.eval(&mut scope)?;

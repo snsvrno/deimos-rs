@@ -5,6 +5,7 @@ Cargo.lock
 
 # working files, alterante versons
 /_*
+*.swp
 
 # comments / notes logs
 /NOTES.md

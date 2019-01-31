@@ -82,10 +82,23 @@ impl Scope {
         }
     }
 
-    pub fn get_function<'a>(&'a self, name : &str) -> Result<&'a Statement,Error> {
+    pub fn eval_function(&mut self, name : &str, args : &Statement) -> Result<Statement,Error> {
+       match self.get_function(name){
+           Ok(func) => func.eval_as_function(self,args),
+           Err(error) => {
+                // going to try if global
+                match self.eval_stdlib_function(name,args) {
+                    Some(result) => result,
+                    None => Err(error),
+                }
+           }
+       }
+    }
+
+    pub fn get_function(&self, name : &str) -> Result<Statement,Error> {
         match self.funcs.get(name) {
             None => Err(format_err!("Function {} isn't defined.",name)),
-            Some(ref func) => Ok(func),
+            Some(func) => Ok(func.clone()),
         }
     }
 }
