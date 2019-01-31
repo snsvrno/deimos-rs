@@ -77,6 +77,7 @@ impl Scope {
     pub fn eval_stdlib_function(&mut self, name : &str, args : &Statement) -> Option<Result<Statement,Error>> {
         match name {
             "print" => Some(stdlib::core::print(self,args)), 
+            "assert" => Some(stdlib::core::assert(self,args)),
             _ => None,
         }
     }

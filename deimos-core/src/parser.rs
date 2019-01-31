@@ -410,7 +410,6 @@ impl<'a> Parser<'a> {
                 let post = match Parser::consume_until_tokens_with_grouping(&mut statement, &[TokenType::Comma, TokenType::RightParen, TokenType::EOL, TokenType::Equal] , false) {
                     Err(_) => panic!("parsing comma phrase, can't find the end of the comma group"),
                     Ok(post) => {
-                        println!("{:?}",post);
                         Parser::collapse_statement(post)?
                     }
                 };

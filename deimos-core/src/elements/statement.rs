@@ -237,7 +237,7 @@ impl Statement {
             _ => panic!("Cannot unwrap {:?} as a number",self),
         }
     }
-
+    
     pub fn as_bool(&self) -> bool {
         match self {
             Statement::Token(ref token) => match token.get_type() {
@@ -412,9 +412,12 @@ impl Statement {
     }
 
     pub fn is_a_list(&self) -> bool {
-        self.is_varlist() || 
-        self.is_exprlist() ||
-        self.is_namelist()
+        match self {
+            Statement::VarList(_) |
+            Statement::ExprList(_) |
+            Statement::NameList(_) => true,
+            _ => false,
+        }
     }
 
     pub fn is_exprlist(&self) -> bool {
@@ -911,12 +914,12 @@ impl Statement {
         // all the clean additions
         if !self.is_a_list() { return None; }
 
-        if self.is_namelist() && item.is_name() {
+        if self.is_namelist() && item.is_name() && self.is_a_list() {
             self.as_namelist_mut().push(item.as_name().to_string());
             return Some(self);
         }
 
-        if ( self.is_varlist() && item.is_var() ) || ( self.is_exprlist() && item.is_expr()  ) {
+        if ( self.is_a_list() && self.is_varlist() && item.is_var() ) || ( self.is_a_list() && self.is_exprlist() && item.is_expr()  ) {
             self.as_list_mut().push(Box::new(item));
             return Some(self);
         }
