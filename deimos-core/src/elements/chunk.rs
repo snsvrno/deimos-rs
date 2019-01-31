@@ -14,10 +14,13 @@ impl Chunk {
     }
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
+        let mut result = Statement::Empty;
+        
         for stat in self.statements.iter() {
-            let result = stat.eval(&mut scope)?;
+            result = stat.eval(&mut scope)?;
         }
-        Ok(Statement::Empty)
+        
+        Ok(result)
     }
 }
 

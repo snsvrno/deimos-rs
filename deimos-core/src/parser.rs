@@ -473,7 +473,7 @@ impl<'a> Parser<'a> {
                                 };
                                 
                                 if !insides_collapsed.is_args() && insides_collapsed != Statement::Empty {
-                                     return Err(InternalError::SyntaxMsg("Function call requires arguements".to_string(),insides_collapsed.get_code_slice()));
+                                    return Err(InternalError::SyntaxMsg("Function call requires arguements".to_string(),insides_collapsed.get_code_slice()));
                                 }
 
                                 let funccal = Statement::FunctionCall(Box::new(function_ident),Box::new(insides_collapsed));

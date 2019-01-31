@@ -109,8 +109,20 @@ impl Statement {
                 Ok(Statement::Empty)
             },
             Statement::FunctionCall(ref name,ref args) => {
-                let function = scope.get_function(name.as_name())?.clone();
-                function.eval_as_function(scope,args)
+                match scope.eval_stdlib_function(&name.as_name(),&args){
+                    Some(result) => result,
+                    None => {
+                        let function = scope.get_function(name.as_name())?.clone();
+                        function.eval_as_function(scope,args)
+                    },
+                }
+                /*match scope.eval_stdlib_function(name.as_name(),args) {
+                    Some(result) => Ok(result),
+                    None => {
+                        let function = scope.get_function(name.as_name())?.clone();
+                        function.eval_as_function(scope,args)
+                    }
+                */
                 // Err(format_err!("FunctionCall isn't implemented"))
             },
             Statement::Unary(op,s1) => {
@@ -144,8 +156,9 @@ impl Statement {
                     _ => Err(format_err!("{} is not a binary operator",op)),
                 }
             },
-            Statement::Assignment(ref vars,exprs) => {
+            Statement::Assignment(ref vars, ref exprs) => {
                 let mut results : Vec<Statement> = Vec::new();
+                
                 for ex in exprs.as_list() {
                     results.push(ex.eval(&mut scope)?);
                 }
@@ -186,6 +199,17 @@ impl Statement {
     ///////////////////////////////////////////////////////////////////////
     /// ACCESS METHODS
 
+    pub fn as_user_output(&self) -> Option<String> {
+        match self {
+            Statement::Token(ref token) => match token.get_type() {
+                TokenType::Number(num) => Some(format!("{}",num)),
+                TokenType::String(string) => Some(format!("{}",string)),
+                _ => None,
+            }
+            _ => None,
+        }
+    }
+
     pub fn as_token_type<'a>(&'a self) -> &'a TokenType {
         match self {
             Statement::Token(ref token) => &token.get_type(),
@@ -225,11 +249,17 @@ impl Statement {
         }
     }
 
-    pub fn as_list<'a>(&'a self) -> &'a Vec<Box<Statement>> {
+    pub fn as_list<'a>(&'a self) -> Vec<&'a Statement> {
         match self {
-            Statement::VarList(ref list) => &list,
-            Statement::ExprList(ref list) => &list,
-            _ => panic!("Cannot unwrap {:?} as a list",self),
+            Statement::ExprList(ref list) |
+            Statement::VarList(ref list) => {
+                let mut new_list : Vec<&Statement> = Vec::new();
+                for i in 0 .. list.len() {
+                    new_list.push(&list[i]);
+                }
+                new_list
+            },
+            _ => vec![&self],
         }
     }
 
@@ -340,6 +370,13 @@ impl Statement {
     ///////////////////////////////////////////////////////////////////////
     /// IS CHECKS
 
+    pub fn is_empty(&self) -> bool {
+        match self {
+            Statement::Empty => true,
+            _ => false,
+        }
+    }
+
     pub fn is_token(&self,token:TokenType) -> bool {
         //! checks if is a token and of that type
 
@@ -382,6 +419,7 @@ impl Statement {
 
     pub fn is_exprlist(&self) -> bool {
         if self.is_varlist() { return true; }
+        if self.is_expr() { return true; }
 
         match self {
             Statement::ExprList(_) => true,
@@ -418,6 +456,7 @@ impl Statement {
         //! thus a list of names is a variable list as well.
 
         if self.is_namelist() { return true; }
+        if self.is_var() { return true; }
 
         match self {
             Statement::VarList(_) => true,

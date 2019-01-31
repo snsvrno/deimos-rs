@@ -5,6 +5,8 @@ use failure::{Error,format_err};
 use crate::elements::Statement;
 use crate::elements::TokenType;
 
+use crate::stdlib;
+
 pub struct Scope {
     vars : HashMap<String,Statement>,
     funcs : HashMap<String,Statement>,
@@ -70,6 +72,13 @@ impl Scope {
 
     pub fn register_function(&mut self,name : &str, function : Statement) {
         self.funcs.insert(name.to_string(),function);
+    }
+
+    pub fn eval_stdlib_function(&mut self, name : &str, args : &Statement) -> Option<Result<Statement,Error>> {
+        match name {
+            "print" => Some(stdlib::core::print(self,args)), 
+            _ => None,
+        }
     }
 
     pub fn get_function<'a>(&'a self, name : &str) -> Result<&'a Statement,Error> {
