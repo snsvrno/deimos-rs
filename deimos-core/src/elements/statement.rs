@@ -109,13 +109,6 @@ impl Statement {
                 Ok(Statement::Empty)
             },
             Statement::FunctionCall(ref name,ref args) => {
-                /*match scope.eval_stdlib_function(&name.as_name(),&args){
-                    Some(result) => result,
-                    None => {
-                        let function = scope.get_function(name.as_name())?.clone();
-                        function.eval_as_function(scope,args)
-                    },
-                }*/
                 scope.eval_function(&name.as_name(),&args)
             },
             Statement::Unary(op,s1) => {
@@ -198,7 +191,18 @@ impl Statement {
                 TokenType::Number(num) => Some(format!("{}",num)),
                 TokenType::String(string) => Some(format!("{}",string)),
                 _ => None,
-            }
+            },
+            Statement::ExprList(ref list) => {
+                let mut string = String::new();
+                for i in 0 .. list.len() {
+                    if i == 0 {
+                        string = format!("{}",list[i].as_user_output().unwrap());
+                    } else {
+                        string = format!("{}    {}",string,list[i].as_user_output().unwrap());
+                    }
+                }
+                Some(string)
+            },
             _ => None,
         }
     }
