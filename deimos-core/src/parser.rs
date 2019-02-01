@@ -124,7 +124,11 @@ impl<'a> Parser<'a> {
                 TokenType::While => {
                     let while_statement = Parser::collapse_block_statement(&mut raw_statements, TokenType::While)?;
                     Option3::Some(while_statement)
-                }
+                },
+                /*TokenType::LeftMoustache => {
+                    let table_constructor = Parser::collapse_table_constructor(&mut raw_statements)?;
+                    Option3::Some(table_constructor)
+                },*/
                 _ => Option3::None,
             };
 
@@ -447,6 +451,34 @@ impl<'a> Parser<'a> {
 
                 let assignment_statement = Parser::collapse_assignment(before, statement)?;
                 return Ok(assignment_statement);
+            }
+
+            // table constructor
+            if statement[pos].is_token(TokenType::LeftMoustache) {
+                
+                let mut before : Vec<Statement> = statement.drain(0 .. pos).collect();
+                statement.remove(0); // removes the { token
+ 
+                let table = match Parser::consume_until_token(&mut statement, TokenType::RightMoustache, false) {
+                    Err(code_slice) => return Err(InternalError::Syntax(code_slice)),
+                    Ok(tokens) => {
+                        let insides = Parser::collapse_statement(tokens)?;
+                        match insides.is_fieldlist() {
+                            false => return Err(InternalError::SyntaxMsg(
+                                "Tables must be made with a field list".to_string(),
+                                insides.get_code_slice())),
+                            true => Statement::create_table(insides),
+                        }
+                    }
+                };
+
+                statement.insert(0,table);
+                for i in (0 .. before.len()).rev() {
+                    statement.insert(0,before.remove(i));
+                }
+
+                pos += 1;
+                continue;
             }
 
             if statement[pos].is_token(TokenType::LeftParen) {
@@ -810,7 +842,7 @@ mod tests {
     #[test]
     #[ignore]
     fn tables() {
-        let ss = setup_simple!("
+        let ss = setup!("
         bob = { 10,20,30,40 }
         ");
 

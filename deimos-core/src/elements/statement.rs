@@ -10,6 +10,32 @@ use crate::elements::Scope;
 
 use crate::elements::statement_evals;
 
+use std::collections::HashMap;
+
+#[derive(PartialEq,Clone,Debug,Hash,Eq)]
+pub enum TableIndex {
+    Number(String),
+    String(String),
+}
+
+impl TableIndex {
+    pub fn create(text : &str) -> TableIndex {
+        match text.parse::<f32>() {
+            Err(_) => TableIndex::String(text.to_string()),
+            Ok(_) => TableIndex::Number(text.to_string()),
+        }
+    }
+}
+
+impl std::fmt::Display for TableIndex {
+    fn fmt(&self, f : &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TableIndex::Number(num) => write!(f,"{}",num),
+            TableIndex::String(st) => write!(f,"\"{}\"",st),
+        }
+    }
+}
+
 #[derive(PartialEq,Debug,Clone)]
 pub enum Statement {
     Empty,
@@ -24,6 +50,8 @@ pub enum Statement {
     ExprList(Vec<Box<Statement>>),   
     VarList(Vec<Box<Statement>>),   
     NameList(Vec<String>),   
+    
+    Table(HashMap<TableIndex,Statement>),
 
     TableConstructor(Vec<Box<Statement>>),                          // { fieldlist }
 
@@ -144,7 +172,7 @@ impl Statement {
             },
             Statement::Assignment(ref vars, ref exprs) => {
                 let mut results : Vec<Statement> = Vec::new();
-                
+
                 for ex in exprs.as_list() {
                     results.push(ex.eval(&mut scope)?);
                 }
@@ -177,7 +205,16 @@ impl Statement {
                     None => Ok(Statement::Empty),
                 },
                 _ => Ok(self.clone())
-            }
+            },
+            Statement::Table(ref table) => {
+                let mut eval_table : HashMap<TableIndex,Statement> = HashMap::new();
+
+                for (k,v) in table {
+                    eval_table.insert(k.clone(),v.eval(scope)?);
+                }
+
+                Ok(Statement::Table(eval_table))
+            },
             _ => Ok(Statement::Empty)
         }
     }
@@ -417,6 +454,28 @@ impl Statement {
             Statement::NameList(_) => true,
             _ => false,
         }
+    }
+
+    pub fn is_fieldlist(&self) -> bool {
+        //! checks if technically a field list
+        //!
+        //! ```text
+        //!
+        //!     [ ]     field {fieldsep field} [fieldsep]
+        //!
+        //! ```
+        
+        // if a single item, could be a list of element 1
+        if self.is_field() { return true; }
+        // a field can be an expr, so an expression list is a type of 
+        // valid fieldlist
+        if self.is_exprlist() { return true; }
+
+        match self {
+            Statement::FieldList(_) => true,
+            _ => false,
+        }
+
     }
 
     pub fn is_exprlist(&self) -> bool {
@@ -839,6 +898,31 @@ impl Statement {
     ///////////////////////////////////////////////////////////////////
     /// CREATIONS
 
+    pub fn create_table(constructor : Statement) -> Statement {
+        let parts = constructor.into_list();
+
+        let mut map : HashMap<TableIndex,Statement> = HashMap::new();
+        let mut index = 1;
+
+        for p in parts.as_list() {
+            match p {
+                part => {
+                    map.insert(
+                        TableIndex::Number(format!("{}",index)),
+                        part.clone()
+                    );
+                    index += 1;
+                }
+            }
+        }
+
+        let table = Statement::Table(map);
+
+        println!("table:\n{}",table);
+
+        table
+    }
+    
     pub fn create_do_end(mut statements : Vec<Statement>) -> Statement {
         let mut list : Vec<Box<Statement>> = Vec::new();
         for s in (0 .. statements.len()).rev() {
@@ -882,7 +966,7 @@ impl Statement {
     pub fn create_list(mut items : Vec<Box<Statement>>) -> Statement {
         //! creates a list out of a vec of Statements
         //!
-        //!``` text
+        //! ``` text
         //! 
         //!      [x]     namelist ::= Name {`,´ Name}
         //!      [x]     varlist ::= var {`,´ var}
@@ -1041,6 +1125,16 @@ impl Statement {
 
         items
     }
+
+    fn render_hashmap(hash : &HashMap<TableIndex,Statement>) -> String {
+        let mut items = String::new();
+
+        for (k,v) in hash {
+            items = format!("{}{} : {}, ",items,k,v);
+        }
+
+        items
+    }
 }   
 
 impl std::fmt::Display for Statement {
@@ -1057,7 +1151,7 @@ impl std::fmt::Display for Statement {
             Statement::VarList(list) => write!(f,"{}",Statement::render_list(&list)),
             Statement::NameList(list) => write!(f,"{}",Statement::render_strings(&list)),
             Statement::TableConstructor(list) => write!(f,"[ {} ]",Statement::render_list(&list)),
-
+            Statement::Table(hash) => write!(f,"{{ {} }}",Statement::render_hashmap(&hash)),
             Statement::DoEnd(stats) => write!(f,"(do {} end)",Statement::render_statements(&stats)),
             Statement::WhileDoEnd(expr,stats) => write!(f,"(while {} do {} end)",expr,Statement::render_statements(&stats)),
 

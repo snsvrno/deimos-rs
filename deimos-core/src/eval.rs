@@ -95,4 +95,15 @@ mod tests {
         assert_eq!(&4_f32, eval.get_value("var1").unwrap().as_number());
         assert_eq!(&9_f32, eval.get_value("var2").unwrap().as_number());
     }
+
+    #[test]
+    fn tables() {
+        let code = include_str!("../../lua/basic/tables.lua");
+        let eval = setup_eval!(&code);
+
+        assert!(&10_f32 != eval.get_value("bob[2]").unwrap().as_number());
+        
+        assert_eq!(&10_f32, eval.get_value("bob[1]").unwrap().as_number());
+        assert_eq!(&20_f32, eval.get_value("bob[2]").unwrap().as_number());
+    }
 }

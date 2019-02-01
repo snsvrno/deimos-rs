@@ -4,7 +4,7 @@ use failure::{Error,format_err};
 
 use crate::elements::Statement;
 use crate::elements::TokenType;
-
+use crate::elements::statement::TableIndex;
 use crate::stdlib;
 
 pub struct Scope {
@@ -57,8 +57,37 @@ impl Scope {
         self.local.len()
     }
 
+
     pub fn get_value<'a>(&'a self, var_name : &str) -> Option<&'a Statement> {
+        let mut sliced = Scope::split_lookup_name(var_name);
         
+        // gets the base value, and then looks inside if we are trying
+        // too index it like an array or a table
+        match self.get_value_internal(sliced.remove(0)) {
+            None => None,
+            Some(ref base) => {
+                let mut working : &Statement = base;
+                loop {
+                   if sliced.len() <= 0 { break; } 
+                   if let Statement::Table(ref table) = working {
+                        let index = sliced.remove(0);
+                        match table.get(&TableIndex::create(&index)) {
+                            None => panic!("Object doesn't contain index {}",index),
+                            Some(ref subtable) => working = subtable,
+                        }
+                   } else {
+                        panic!("Object {} is not a table.",working);
+                   }
+                }
+                Some(&working)
+            }
+        }
+    }
+
+    fn get_value_internal<'a>(&'a self, var_name : &str) -> Option<&'a Statement> {
+        //! an private internal function, doesn't mean it gets the 
+        //! internal value or something
+
         // first checks if there are local scopes, and checks if that stuff is in there
         for i in (0 .. self.local.len()).rev() {
             if let Some(ref value) = self.local[i].get_value(var_name) {
@@ -68,7 +97,38 @@ impl Scope {
 
         // then checks the global list
         self.vars.get(var_name)
-    } 
+    }
+
+    fn split_lookup_name<'b>(name : &'b str) -> Vec<&'b str> {
+        //! suppose to split a string into sections based
+        //! on lua rules
+        //!
+        //! bob[1][2][3]
+        //! bob[1].left[3]
+        //! bob.x
+        //!
+        
+        let mut splits : Vec<&str> = Vec::new();
+        let mut c = 0;
+
+        for i in 0 .. name.len() {
+            let char = &name[i .. i+1];
+            match char {
+                "[" | 
+                "]" |
+                "." => {
+                    splits.push(&name[c .. i]); c = i + 1; 
+                },
+                _ => (),
+            } 
+        }
+
+        if c < name.len() {
+            splits.push(&name[c .. ]);
+        }
+
+        splits
+    }
 
     pub fn register_function(&mut self,name : &str, function : Statement) {
         self.funcs.insert(name.to_string(),function);
