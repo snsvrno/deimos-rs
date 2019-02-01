@@ -17,3 +17,11 @@ pub fn evaluate(code : &str) -> Result<Eval,Error> {
     let evaluated = Eval::from_parser(parser)?;
     Ok(evaluated)
 }
+
+pub fn run(code :&str) -> Result<elements::Statement,Error> {
+    let scanner = Scanner::init(code).scan()?;
+    let parser = Parser::from_scanner(scanner)?;
+    let evaluated = Eval::from_parser(parser)?;
+
+    Ok(evaluated.get_result().clone()) 
+}

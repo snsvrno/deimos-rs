@@ -1,18 +1,23 @@
 use std::env;
-use std::io::{stdin,stdout,Write};
+use std::io::{stdin,stdout,Write,prelude::*};
+use std::fs::File;
 
 use deimos_core;
 
 pub struct Options {
     pub show_every_result : bool,
     pub interactive_mode : bool,
+    pub run_file : Option<String>,
+    pub load_file : Vec<String>,
 }
 
 impl Default for Options {
     fn default() -> Self {
         Options {
             show_every_result : false,
-            interactive_mode : true,
+            interactive_mode : false,
+            run_file : None,
+            load_file : Vec::new(),
         }
     }
 }
@@ -33,20 +38,30 @@ fn main() {
         match args[i].as_str() {
             "-d" => { options.show_every_result = true; },
             "-v" => { print_version_string(); break; },
-            "-i" => options.interactive_mode = true, // option_i(),
-            "-e" => { option_e(&args[i+1]); i += 1; }
-            "-l" => { option_l(&args[i+1]); i += 1; }
+            "-i" => options.interactive_mode = true,
+            "-l" => { options.load_file.push(args[i+1].to_string()); i += 1; }
+            "-e" => { options.run_file = Some(args[i+1].to_string()); i += 1; }
             _ => ()
         }
         i += 1;
     }
-
+    
     process_args(&options);
 }
 
 fn process_args(options : &Options) {
+    for i in 0 .. options.load_file.len() {
+        println!("load file: {}",options.load_file[i]);
+    }
+    
     if options.interactive_mode {
         interactive_mode(options);
+        return;
+    }
+
+    if let Some(ref file) = options.run_file {
+        run_file(&file,options);
+        return;
     }
 }
 
@@ -56,6 +71,24 @@ fn print_version_string() {
 
 fn get_prompt() -> String {
     format!(">")
+}
+
+fn run_file(file_path : &str, options : &Options) {
+    match File::open(file_path) {
+        Err(error) => println!("ERROR : {}",error),
+        Ok(mut file) => {
+            let mut buffer : String = String::new();
+            match file.read_to_string(&mut buffer) {
+                Err(error) => println!("ERROR : {}",error),
+                Ok(_) => {
+                    match deimos_core::run(&buffer) {
+                        Err(error) => println!("ERROR : {}",error),
+                        Ok(result) => if !result.is_empty() { println!("{}",result); },
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn interactive_mode(options : &Options) {
@@ -82,13 +115,6 @@ fn interactive_mode(options : &Options) {
         }
         input = String::new();
     }
-}
-
-fn option_e(code : &str) {
-    println!("run this code: '{}'",code);
-}
-fn option_l(code : &str) {
-    println!("include this library: '{}'",code);
 }
 
 fn app_string() -> String {
