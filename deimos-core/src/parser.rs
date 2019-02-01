@@ -701,6 +701,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn assignment_simple() {
 
         // single assignment
@@ -804,5 +805,17 @@ mod tests {
         print_em!(check_against);
 
         assert_eq!(function_def.chunks[0],check_against);
+    }
+
+    #[test]
+    #[ignore]
+    fn tables() {
+        let ss = setup_simple!("
+        bob = { 10,20,30,40 }
+        ");
+
+        print_em!(ss.chunks[0]);
+
+        assert!(false);
     }
 }

@@ -108,7 +108,9 @@ fn interactive_mode(options : &Options) {
             Ok(result) => { 
                 if options.show_every_result {
                     if let Some(text) = result.as_user_output() {
-                        println!("d: {}",text); 
+                        if text != "nil" {
+                            println!("d: {}",text);
+                        }
                     }
                 }
             },

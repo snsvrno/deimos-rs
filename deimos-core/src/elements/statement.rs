@@ -151,12 +151,12 @@ impl Statement {
 
                 if vars.is_namelist() {
                     let list = vars.as_namelist();
-                    for i in 0 .. list.len() {
+                    for i in (0 .. list.len()).rev() {
                         scope.assign(&list[i],results.remove(i))?;
                     }
                 } else {
                     let list = vars.as_list();
-                    for i in 0 .. list.len() {
+                    for i in (0 .. list.len()).rev() {
                         match *list[i] {
                             Statement::Token(ref token) => match token.get_type() {
                                 TokenType::Identifier(ref var_name) => {
@@ -190,6 +190,7 @@ impl Statement {
             Statement::Token(ref token) => match token.get_type() {
                 TokenType::Number(num) => Some(format!("{}",num)),
                 TokenType::String(string) => Some(format!("{}",string)),
+                TokenType::Nil => Some(format!("nil")),
                 _ => None,
             },
             Statement::ExprList(ref list) => {
@@ -203,6 +204,7 @@ impl Statement {
                 }
                 Some(string)
             },
+            Statement::Empty => Some(format!("nil")),
             _ => None,
         }
     }
@@ -788,6 +790,15 @@ impl Statement {
     ///////////////////////////////////////////////////////////////
     /// INTO CONVERSIONS
 
+    pub fn into_list(self) -> Statement {
+        match self {
+            Statement::VarList(_) |
+            Statement::ExprList(_) |
+            Statement::NameList(_) => self,
+            statement => Statement::create_list(vec![Box::new(statement)]),
+        }
+    }
+
     pub fn into_unary(self,expr : Statement) -> Statement {
         if !self.is_unop() { panic!("Cannot make {:?} into unary, not an operator.",self); }
         if !expr.is_expr() { panic!("Cannot make unary, {:?} isn't an expression.",expr); }
@@ -866,7 +877,11 @@ impl Statement {
 
     }
 
+    
+
     pub fn create_list(mut items : Vec<Box<Statement>>) -> Statement {
+        //! creates a list out of a vec of Statements
+        //!
         //!``` text
         //! 
         //!      [x]     namelist ::= Name {`,´ Name}
@@ -879,7 +894,7 @@ impl Statement {
 
         // check if we already have a list
         if items.len() == 1 {
-            if items[0].is_namelist() || items[0].is_varlist() || items[0].is_exprlist() {
+            if items[0].is_a_list() {
                 return *(items.remove(0));
             }
         }
@@ -932,8 +947,12 @@ impl Statement {
         None
     }
 
-    pub fn create_assignment(mut vars: Statement, mut exprs : Statement, local : bool) -> Statement {
+    pub fn create_assignment(in_vars: Statement, in_exprs : Statement, local : bool) -> Statement {
         // gets the two lists the same length
+       
+        let mut vars = in_vars.into_list();
+        let mut exprs = in_exprs.into_list();
+
         loop {
             if vars.len() == exprs.len() { break; }
             match vars.len() > exprs.len() {
@@ -941,6 +960,7 @@ impl Statement {
                     exprs.as_list_mut().push(Box::new(Statement::Empty));
                 },
                 false => {
+                    //vars = vars.add_to_list(Statement::Empty).unwrap();
                     if vars.is_namelist() {
                         vars.as_namelist_mut().push("_".to_string());
                     } else {
