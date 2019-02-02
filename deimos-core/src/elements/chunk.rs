@@ -9,8 +9,20 @@ pub struct Chunk {
 }
 
 impl Chunk {
+    pub fn empty() -> Chunk {
+        Chunk { statements : Vec::new() }
+    }
+    
     pub fn new(statements : Vec<Statement>) -> Chunk {
         Chunk { statements }
+    }
+
+    pub fn add(&mut self, statement : Statement) {
+        self.statements.push(statement);
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.statements.len() == 0
     }
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {

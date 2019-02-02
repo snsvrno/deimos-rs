@@ -42,6 +42,7 @@ pub enum Statement {
     Token(Token),
     Unary(Token,Box<Statement>),                                    // unop, expr
     Binary(Token,Box<Statement>,Box<Statement>),                    // binop, expr1, expr2
+    Group(Box<Statement>),
 
     FieldNamed(Box<Statement>,Box<Statement>),                      // [expr]=expr 
     FieldBracket(Box<Statement>,Box<Statement>),                    // Name=expr
@@ -116,6 +117,7 @@ impl Statement {
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         match self {
+            Statement::Group(ref insides) => insides.eval(scope),
             Statement::ExprList(ref list) => {
                 let mut new_list : Vec<Box<Statement>> = Vec::new();
                 for i in 0 .. list.len() {
@@ -421,6 +423,13 @@ impl Statement {
             _ => false,
         }
     }
+
+    pub fn is_token_ref(&self,token : &TokenType) -> bool {
+        match self {
+            Statement::Token(ref t) => t.get_type() == token,
+            _ => false
+        }
+    }
     
     pub fn is_bool(&self) -> bool {
         if self.is_token(TokenType::False) || self.is_token(TokenType::True) {
@@ -563,7 +572,7 @@ impl Statement {
         //!     [x]    not |        
         //!     [x]    '#'
         //! 
-        //! ``` 
+        //! ```
 
         
         match self {
@@ -689,6 +698,7 @@ impl Statement {
                 TokenType::String(_) => true,
                 _ => false,
             },
+            Statement::Group(_) |
             Statement::Binary(_,_,_) |
             Statement::Unary(_,_) => true,
             _ => false,
@@ -877,7 +887,7 @@ impl Statement {
         match self {
             Statement::Token(token) => { 
                 // need to check if we have another binary that resolved too soon,
-                // basically we are checking the order of operation here.
+                // basically we are checking the order of operation here
                 
                 if let Statement::Binary(ref op,_,_) = expr1 {
                     if TokenType::oop_binary(&token.get_type(),&op.get_type()) {
@@ -1001,36 +1011,6 @@ impl Statement {
         Statement::ExprList(items)
     }
 
-    pub fn add_to_list(mut self, item : Statement) -> Option<Self> {
-        //! adds an item to a list, if a list. will not panic if not a list, instead will
-        //! return a false.
-        //!
-        //! needs to be able to transform the list to another type if possible.
-        
-        // all the clean additions
-        if !self.is_a_list() { return None; }
-
-        if self.is_namelist() && item.is_name() && self.is_a_list() {
-            self.as_namelist_mut().push(item.as_name().to_string());
-            return Some(self);
-        }
-
-        if ( self.is_a_list() && self.is_varlist() && item.is_var() ) || ( self.is_a_list() && self.is_exprlist() && item.is_expr()  ) {
-            self.as_list_mut().push(Box::new(item));
-            return Some(self);
-        }
-
-        // require some transformation
-        if self.is_namelist() && item.is_var() {
-            let mut var_list = self.into_varlist();
-            var_list.as_list_mut().push(Box::new(item));
-            self = var_list;
-            return Some(self);
-        }
-
-        None
-    }
-
     pub fn create_assignment(in_vars: Statement, in_exprs : Statement, local : bool) -> Statement {
         // gets the two lists the same length
        
@@ -1075,6 +1055,18 @@ impl Statement {
             },
             _ => panic!("Exploding {:?} as a binary isn't allowed, not a binary.",self),
 
+        }
+    }
+
+    pub fn explode_list(self) -> Vec<Box<Statement>> {
+        match self {
+            Statement::VarList(list) => list,
+            Statement::ExprList(list) => list,
+            Statement::NameList(_) => {
+                let list = self.into_varlist();
+                list.explode_list()
+            },
+            _=> panic!("can't explode {} as a list",self),
         }
     }
 
@@ -1163,6 +1155,8 @@ impl std::fmt::Display for Statement {
             Statement::FunctionNamed(name,args,body) => write!(f,"(fn {}<{}> {} end)",name,Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::Return(list) => write!(f,"(return {})",&list),
             
+            Statement::Group(insides) => write!(f,"{}",insides),
+
             Statement::Empty => write!(f,"nil"),
         }
     }
