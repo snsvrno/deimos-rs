@@ -57,7 +57,6 @@ impl Scope {
         self.local.len()
     }
 
-
     pub fn get_value<'a>(&'a self, var_name : &str) -> Option<&'a Statement> {
         let mut sliced = Scope::split_lookup_name(var_name);
         
@@ -72,7 +71,7 @@ impl Scope {
                    if let Statement::Table(ref table) = working {
                         let index = sliced.remove(0);
                         match table.get(&TableIndex::create(&index)) {
-                            None => panic!("Object doesn't contain index {}",index),
+                            None => return None, // panic!("Object doesn't contain index {}",index),
                             Some(ref subtable) => working = subtable,
                         }
                    } else {

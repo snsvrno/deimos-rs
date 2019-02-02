@@ -3,10 +3,18 @@ use crate::scanner::Scanner;
 
 use failure::{Error,format_err};
 
+#[derive(PartialEq,Copy,Clone)]
+enum ParserMode {
+    Normal,
+    Table,
+}
+
 pub struct Parser<'a> {
     raw_code : &'a str,
-    chunks : Vec<Chunk>
+    chunks : Vec<Chunk>,
 }
+
+static mut MODE : ParserMode = ParserMode::Normal;
 
 impl<'a> Parser<'a> {
     
@@ -45,7 +53,7 @@ impl<'a> Parser<'a> {
                 TokenType::EOF |
                 TokenType::EOL => {
                     if working_phrase.len() > 0 {
-                        let state = Parser::collapse_statement(working_phrase)?;
+                        let state = Parser::collapse_statement(ParserMode::Normal, working_phrase)?;
                         current_chunk.add(state);
                         // creating new objects that we just used.
                         working_phrase = Vec::new();
@@ -69,7 +77,7 @@ impl<'a> Parser<'a> {
         (self.raw_code,self.chunks)
     }
 
-    fn collapse_statement(mut working_phrase : Vec<Statement>) -> Result<Statement,Error> {
+    fn collapse_statement(mode : ParserMode, mut working_phrase : Vec<Statement>) -> Result<Statement,Error> {
         //! takes a list of `Statement` that should be able to be collapsed down into 
         //! a single new statement.
         //!
@@ -88,7 +96,7 @@ impl<'a> Parser<'a> {
             // unary operation
             if working_phrase[pos].is_unop() {
                if pos == 0 || (if pos > 0 { working_phrase[pos-1].is_expr() == false } else { true }) {
-                    let expr = Parser::consume_check_for_grouping(&mut working_phrase, pos+1)?;
+                    let expr = Parser::consume_check_for_grouping(mode, &mut working_phrase, pos+1)?;
                     let op = working_phrase.remove(pos);
 
                     working_phrase.insert(pos,op.into_unary(expr));
@@ -106,7 +114,7 @@ impl<'a> Parser<'a> {
                     // it if it needs collapsing
                     //
                     // expr1 should have already been collapsed, so we don't need to check it.
-                    let expr2 = Parser::consume_check_for_grouping(&mut working_phrase, pos+1)?; 
+                    let expr2 = Parser::consume_check_for_grouping(mode, &mut working_phrase, pos+1)?; 
                     let op = working_phrase.remove(pos);
                     let expr1 = working_phrase.remove(pos-1);
 
@@ -121,12 +129,82 @@ impl<'a> Parser<'a> {
             // creates a list of some sort.
             if working_phrase[pos].is_token(TokenType::Comma) {
                 if pos > 0 && working_phrase.len() > pos {
-                    let next_section = Parser::consume_until_check_for_grouping(&mut working_phrase, pos+1, &[TokenType::Comma, TokenType::Equal])?;
+                    
+                    // changes the search terms if we are in the table mode, this is because normally when
+                    // you see a comma is probably an assignment thing
+                    //      x,y,z = 1,2,3
+                    // so you want to stop when you see an `equals` because its the end of the list, but if
+                    // you are in a table the equals is part of that section between the commas
+                    //      x = { y = 1, z = 2, 30 }
+                    // so we need to collect the equals and move to the next comma section
+                    
+                    let search_terms = if mode == ParserMode::Table {
+                        vec![TokenType::Comma]
+                    } else {    
+                        vec![TokenType::Comma, TokenType::Equal]
+                    };
+
+                    let next_section = Parser::consume_until_check_for_grouping(&mut working_phrase, pos + 1, &search_terms)?;
+                    
+                    let collapsed_tokens : Statement = Parser::collapse_statement(mode, next_section)?;
                     let mut pre_section_list = working_phrase.remove(pos-1).into_list().explode_list();
-                    pre_section_list.push(Box::new(next_section));
+
+                    pre_section_list.push(Box::new(collapsed_tokens));
                     working_phrase.insert(pos-1,Statement::create_list(pre_section_list));             
                     
                     working_phrase.remove(pos); // removes the comma;
+
+                    pos = 0;
+                    continue;
+                }
+            }
+
+            // table access
+            if working_phrase[pos].is_token(TokenType::LeftBracket) {
+                if pos > 0 && working_phrase.len() > pos {
+
+                    let insides = Parser::consume_until_check_for_grouping(&mut working_phrase, pos + 1, &[TokenType::RightBracket])?;
+                    let collapsed_insides = Parser::collapse_statement(mode, insides)?;
+
+                    let identifier = working_phrase.remove(pos-1);
+                    // creates the inside list of items
+                    let list_of_stuff : Vec<Box<Statement>> = if identifier.is_complex_var() {
+                        let mut list = identifier.explode_list();
+                        list.push(Box::new(collapsed_insides));
+                        list
+                    } else {
+                        let mut list : Vec<Box<Statement>> = Vec::new();
+                        list.push(Box::new(identifier));
+                        list.push(Box::new(collapsed_insides));
+                        list
+                    };
+
+                    working_phrase.remove(pos); // removes the `]` bracket
+                    working_phrase.remove(pos - 1); // removes the `[` bracket
+                    working_phrase.insert(pos - 1,Statement::ComplexVar(list_of_stuff));
+
+                    pos = 0;
+                    continue;
+                }
+            }
+
+            // table constructor
+            if working_phrase[pos].is_token(TokenType::LeftMoustache) {
+                if working_phrase.len() > pos {
+                    // lets a flag to let it know that is trying to work inside a table.
+                    // so far only does this because of the ability to do assignments to parts 
+                    // of a table inside a table.
+                    //
+                    //  x = { y = 5, 1, 2 }
+
+                    let insides = Parser::consume_until_check_for_grouping(&mut working_phrase, pos + 1, &[TokenType::RightMoustache])?;
+
+                    let collapsed_tokens : Statement = Parser::collapse_statement(ParserMode::Table, insides)?;
+                    let table = Statement::create_table(collapsed_tokens);
+                    
+                    working_phrase.remove(pos+1); // removes the '}' moustache
+                    working_phrase.remove(pos); // removes the `{` moustache
+                    working_phrase.insert(pos,table);
 
                     pos = 0;
                     continue;
@@ -139,7 +217,7 @@ impl<'a> Parser<'a> {
                     
                     // assignment is the end of the statement, there isn't anything else to do
                     // really.
-                    let right_hand : Statement = Parser::collapse_statement(working_phrase.drain(pos+1 ..).collect())?.into_list();
+                    let right_hand : Statement = Parser::collapse_statement(mode, working_phrase.drain(pos+1 ..).collect())?.into_list();
                     let _op = working_phrase.remove(pos);
                     let left_hand = working_phrase.remove(pos-1).into_list();
                     let local = if pos > 1 {
@@ -174,7 +252,7 @@ impl<'a> Parser<'a> {
             // grouping
             if working_phrase[pos].is_token(TokenType::LeftParen) {
 
-                let grouped_statement = Parser::consume_check_for_grouping(&mut working_phrase,pos)?;
+                let grouped_statement = Parser::consume_check_for_grouping(mode, &mut working_phrase,pos)?;
 
                 // primative function call check, so we can get printing working
                 // for testing
@@ -212,9 +290,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn consume_until_check_for_grouping(working_phrase : &mut Vec<Statement>, start : usize, tokens : &[TokenType]) -> Result<Statement, Error> {
+    fn consume_until_check_for_grouping(working_phrase : &mut Vec<Statement>, start : usize, tokens : &[TokenType]) -> Result<Vec<Statement>, Error> {
         let mut stop_point = working_phrase.len();
-
+        
         for token in tokens.iter() {
             if let Ok(found) = Parser::find_token_with_depth(working_phrase,start,token.clone()) {
                 if found < stop_point { stop_point = found; }
@@ -222,11 +300,10 @@ impl<'a> Parser<'a> {
         }
 
         let tokens : Vec<Statement> = working_phrase.drain(start .. stop_point).collect();
-        let collapsed_tokens : Statement = Parser::collapse_statement(tokens)?;
-        Ok(collapsed_tokens) 
+        Ok(tokens) 
     }
 
-    fn consume_check_for_grouping(working_phrase : &mut Vec<Statement>, start : usize) -> Result<Statement,Error> {
+    fn consume_check_for_grouping(mode : ParserMode, working_phrase : &mut Vec<Statement>, start : usize) -> Result<Statement,Error> {
         //! gets the next statement, and checks if it is a start of a grouping
         //! if it is then it will do the grouping magic stuff and create a new statement
         //! with the grouping, if it isn't then it will just return the next statement
@@ -235,11 +312,11 @@ impl<'a> Parser<'a> {
 
         let expr = working_phrase.remove(start);
         
-        if expr.is_token(TokenType::LeftParen) {
+        if expr.is_token(TokenType::LeftParen) || expr.is_token(TokenType::LeftBracket) || expr.is_token(TokenType::LeftMoustache) {
             let until_pos = Parser::find_token_with_depth(&working_phrase, start, TokenType::RightParen)?;
             let insides : Vec<Statement> = working_phrase.drain(start .. until_pos).collect();
 
-            let collapsed_inside : Statement = Parser::collapse_statement(insides)?;
+            let collapsed_inside : Statement = Parser::collapse_statement(mode, insides)?;
             working_phrase.remove(start); // remove the right parenthesis
                          
             Ok(Statement::Group(Box::new(collapsed_inside)))
@@ -250,14 +327,28 @@ impl<'a> Parser<'a> {
 
     fn find_token_with_depth(working_phrase : &Vec<Statement>, start : usize, token : TokenType) -> Result<usize,Error> {
         let mut pos = start;
-        let mut depth = if token == TokenType::RightParen { 1 } else { 0 };
+        let mut depth = match token {
+            TokenType::RightParen | 
+            TokenType::RightMoustache | 
+            TokenType::RightBracket => 1,
+            _ => 0,
+        };
         
         loop {
             if pos >= working_phrase.len() { break; }
             
-            if working_phrase[pos].is_token(TokenType::LeftParen) { depth += 1; }
-            if working_phrase[pos].is_token(TokenType::RightParen) { depth -=1; }
-
+            // modifies the depth
+            if working_phrase[pos].is_token(TokenType::LeftParen) 
+            || working_phrase[pos].is_token(TokenType::LeftMoustache) 
+            || working_phrase[pos].is_token(TokenType::LeftBracket) {
+                depth += 1;
+            }
+            if working_phrase[pos].is_token(TokenType::RightParen) 
+            || working_phrase[pos].is_token(TokenType::RightMoustache) 
+            || working_phrase[pos].is_token(TokenType::RightBracket) {
+                depth -= 1;
+            }
+            
             if working_phrase[pos].is_token_ref(&token) && depth == 0 {
                 return Ok(pos);
             }

@@ -48,6 +48,8 @@ pub enum Statement {
     FieldBracket(Box<Statement>,Box<Statement>),                    // Name=expr
     FieldList(Vec<Box<Statement>>),                                 // field {fieldsep field} [fieldsep]
 
+    ComplexVar(Vec<Box<Statement>>),                                // a var but with access stuff --->  prefixexp `[´ exp `]´ | prefixexp `.´ Name 
+
     ExprList(Vec<Box<Statement>>),   
     VarList(Vec<Box<Statement>>),   
     NameList(Vec<String>),   
@@ -117,6 +119,31 @@ impl Statement {
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         match self {
+            Statement::ComplexVar(ref address) => {
+                let var_name = {
+                    let mut string = String::new();
+
+                    for i in 0 .. address.len() {
+                        // needs to evaluate each piece, because what if we put some logic in there or something
+                        // like `x[y+1]`
+
+                        if i == 0 {
+                            let section : Statement = if address[i].is_name() { *address[i].clone() } else { address[i].eval(scope)? };
+                            string = format!("{}",section.as_user_output().unwrap());
+                        } else {
+                            let section = address[i].eval(scope)?;
+                            string = format!("{}[{}]",string,section.as_user_output().unwrap());
+                        }
+                    }
+
+                    string
+                };
+
+                match scope.get_value(&var_name) {
+                    Some(value) => Ok(value.clone()),
+                    None => Ok(Statement::Empty),
+                }
+            },
             Statement::NameList(ref list) => {
                 let mut return_list : Vec<Box<Statement>> = Vec::new();
 
@@ -261,6 +288,7 @@ impl Statement {
             Statement::Token(ref token) => match token.get_type() {
                 TokenType::Number(num) => Some(format!("{}",num)),
                 TokenType::String(string) => Some(format!("{}",string)),
+                TokenType::Identifier(id) => Some(format!("{}",id)),
                 TokenType::Nil => Some(format!("nil")),
                 _ => None,
             },
@@ -274,6 +302,10 @@ impl Statement {
                     }
                 }
                 Some(string)
+            },
+            Statement::Table(ref table) => {
+                // TODO, some way to print this?
+                Some(format!("table 0x123"))
             },
             Statement::Empty => Some(format!("nil")),
             _ => None,
@@ -532,6 +564,13 @@ impl Statement {
     pub fn is_namelist(&self) -> bool {
         match self {
             Statement::NameList(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_complex_var(&self) -> bool {
+        match self {
+            Statement::ComplexVar(_) => true,
             _ => false,
         }
     }
@@ -960,8 +999,6 @@ impl Statement {
 
         let table = Statement::Table(map);
 
-        println!("table:\n{}",table);
-
         table
     }
     
@@ -1094,6 +1131,7 @@ impl Statement {
         match self {
             Statement::VarList(list) => list,
             Statement::ExprList(list) => list,
+            Statement::ComplexVar(list) => list,
             Statement::NameList(_) => {
                 let list = self.into_varlist();
                 list.explode_list()
@@ -1159,6 +1197,20 @@ impl Statement {
 
         items
     }
+
+    fn render_complex_var(list : &Vec<Box<Statement>>) -> String {
+        let mut string = String::new();
+
+        for i in 0 .. list.len() {
+            if i == 0 {
+                string = format!("{}",list[i]);
+            } else {
+                string = format!("{}[{}]",string,list[i]);
+            }
+        }
+
+        string
+    }
 }   
 
 impl std::fmt::Display for Statement {
@@ -1186,6 +1238,7 @@ impl std::fmt::Display for Statement {
             Statement::Function(args,body) => write!(f,"(fn<{}> {} end)",Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::FunctionNamed(name,args,body) => write!(f,"(fn {}<{}> {} end)",name,Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::Return(list) => write!(f,"(return {})",&list),
+            Statement::ComplexVar(access) => write!(f, "{}",Statement::render_complex_var(&access)),
             
             Statement::Group(insides) => write!(f,"{}",insides),
 
