@@ -987,6 +987,15 @@ impl Statement {
 
         for p in parts.as_list() {
             match p {
+                Statement::Assignment(namelist,exprlist) => {
+                    let var = &namelist.as_namelist()[0];
+                    let expr = exprlist.as_list_index(0).unwrap();
+
+                    map.insert(
+                        TableIndex::String(var.to_string()),
+                        expr.clone()
+                    );
+                },
                 part => {
                     map.insert(
                         TableIndex::Number(format!("{}",index)),

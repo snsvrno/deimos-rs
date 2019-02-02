@@ -159,7 +159,7 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // table access
+            // table access, bracket
             if working_phrase[pos].is_token(TokenType::LeftBracket) {
                 if pos > 0 && working_phrase.len() > pos {
 
@@ -188,6 +188,40 @@ impl<'a> Parser<'a> {
                 }
             }
 
+            // table access. dot
+            if working_phrase[pos].is_token(TokenType::Period) {
+                if pos > 0 && working_phrase.len() > pos {
+                    if working_phrase[pos+1].is_name() {
+                        let next : Statement = { 
+                            let id = working_phrase.remove(pos+1);
+                            let string = id.as_user_output().unwrap();
+                            Statement::Token(crate::elements::Token::new(
+                                TokenType::String(string),
+                                id.get_code_slice()
+                            ))
+                        };
+                        working_phrase.remove(pos); // removes the `.`
+                        let identifier = working_phrase.remove(pos-1);
+
+                        // creates the inside list of items
+                        let list_of_stuff : Vec<Box<Statement>> = if identifier.is_complex_var() {
+                            let mut list = identifier.explode_list();
+                            list.push(Box::new(next));
+                            list
+                        } else {
+                            let mut list : Vec<Box<Statement>> = Vec::new();
+                            list.push(Box::new(identifier));
+                            list.push(Box::new(next));
+                            list
+                        };
+
+                        working_phrase.insert(pos - 1,Statement::ComplexVar(list_of_stuff));
+                        pos = 0;
+                        continue;
+                    }
+                }
+            }
+
             // table constructor
             if working_phrase[pos].is_token(TokenType::LeftMoustache) {
                 if working_phrase.len() > pos {
@@ -205,6 +239,7 @@ impl<'a> Parser<'a> {
                     working_phrase.remove(pos+1); // removes the '}' moustache
                     working_phrase.remove(pos); // removes the `{` moustache
                     working_phrase.insert(pos,table);
+
 
                     pos = 0;
                     continue;
