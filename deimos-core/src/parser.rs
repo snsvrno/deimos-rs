@@ -136,8 +136,6 @@ impl<'a> Parser<'a> {
             // assignments
             if working_phrase[pos].is_token(TokenType::Equal) {
                 if pos > 0 && working_phrase.len() > pos {
-                    println!("ASSINGMENT");
-                    for i in 0 .. working_phrase.len() { println!("{} : {}",i,working_phrase[i]); }
                     
                     // assignment is the end of the statement, there isn't anything else to do
                     // really.
@@ -175,10 +173,12 @@ impl<'a> Parser<'a> {
 
             // grouping
             if working_phrase[pos].is_token(TokenType::LeftParen) {
+
                 let grouped_statement = Parser::consume_check_for_grouping(&mut working_phrase,pos)?;
-                
+
                 // primative function call check, so we can get printing working
                 // for testing
+                // TODO : change this, make it better so we can handle the other calls
                 if pos > 0 {
                     if working_phrase[pos-1].is_name(){
                         let function_name = working_phrase.remove(pos-1);
@@ -206,7 +206,7 @@ impl<'a> Parser<'a> {
         }
 
         match working_phrase.len() {
-            0 => panic!("weird error"),
+            0 => Ok(Statement::Empty),
             1 => Ok(working_phrase.remove(0)),
             _ => Err(format_err!("Failed to collapse into a single statement, left with {} statements",working_phrase.len())),
         }

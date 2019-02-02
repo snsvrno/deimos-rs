@@ -117,6 +117,19 @@ impl Statement {
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         match self {
+            Statement::NameList(ref list) => {
+                let mut return_list : Vec<Box<Statement>> = Vec::new();
+
+                for name in list.iter() {
+                    let value : Statement = match scope.get_value(&name) {
+                        None => Statement::Empty,
+                        Some(value) => value.clone(),
+                    };
+                    return_list.push(Box::new(value));
+                }
+
+                Ok(Statement::ExprList(return_list))
+            },
             Statement::Group(ref insides) => insides.eval(scope),
             Statement::ExprList(ref list) => {
                 let mut new_list : Vec<Box<Statement>> = Vec::new();
@@ -173,24 +186,43 @@ impl Statement {
                 }
             },
             Statement::Assignment(ref vars, ref exprs) => {
+                // when performing assignments, the exprlist (the right side)
+                // must be evaluated before anything else is evaluated. so that
+                // you should be able to do the following.
+                //
+                // x,y = y,x
+                //
+                // and actually swap the two values.
+            
                 let mut results : Vec<Statement> = Vec::new();
 
-                for ex in exprs.as_list() {
+                /*for ex in exprs.as_list() {
                     results.push(ex.eval(&mut scope)?);
-                }
+                }*/
+
+                let val_exprs = exprs.eval(&mut scope)?;
 
                 if vars.is_namelist() {
                     let list = vars.as_namelist();
                     for i in (0 .. list.len()).rev() {
-                        scope.assign(&list[i],results.remove(i))?;
+                        let value = match val_exprs.as_list_index(i) {
+                            None => Statement::Empty,
+                            Some(value) => value.clone(),                        
+                        };
+                        scope.assign(&list[i], value);
                     }
                 } else {
                     let list = vars.as_list();
                     for i in (0 .. list.len()).rev() {
+                        let value = match val_exprs.as_list_index(i) {
+                            None => Statement::Empty,
+                            Some(value) => value.clone(),                        
+                        };
+
                         match *list[i] {
                             Statement::Token(ref token) => match token.get_type() {
                                 TokenType::Identifier(ref var_name) => {
-                                    scope.assign(&var_name,results.remove(i))?;
+                                    scope.assign(&var_name,value)?;
                                 },
                                 _=> { return Err(format_err!("Assignment: don't know what to do with {}",token)); },
                             },
@@ -1037,7 +1069,7 @@ impl Statement {
         if vars.len() != exprs.len() {
             panic!("Error creating assignment, varlist and expr list must be the same!");
         }
-
+        
         match local {
             true => Statement::AssignmentLocal(Box::new(vars),Box::new(exprs)),
             false => Statement::Assignment(Box::new(vars),Box::new(exprs))
@@ -1150,7 +1182,7 @@ impl std::fmt::Display for Statement {
             Statement::Assignment(varlist,exprlist) => write!(f,"(= {} {})",&varlist,&exprlist),
             Statement::AssignmentLocal(varlist,exprlist) => write!(f,"(= local {} {})",&varlist,&exprlist),
             
-            Statement::FunctionCall(name,args) => write!(f,"({}() {})",name,&args),
+            Statement::FunctionCall(name,args) => write!(f,"(fncall<{}> {})",name,&args),
             Statement::Function(args,body) => write!(f,"(fn<{}> {} end)",Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::FunctionNamed(name,args,body) => write!(f,"(fn {}<{}> {} end)",name,Statement::render_strings(&args),Statement::render_list(&body)),
             Statement::Return(list) => write!(f,"(return {})",&list),
