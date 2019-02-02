@@ -730,13 +730,16 @@ impl Statement {
         //! 
         //!     [x]   var | 
         //!     [ ]   functioncall | 
-        //!     [ ]   `(´ exp `)´
+        //!     [x]   `(´ exp `)´
         //! 
         //! ```
         
         if self.is_var() { return true; }
-
-        return false;
+        
+        match self {
+            Statement::Group(_) => true,
+            _ => false,
+        }
     }
 
     pub fn is_expr(&self) -> bool {
@@ -771,6 +774,7 @@ impl Statement {
             },
             Statement::Group(_) |
             Statement::Binary(_,_,_) |
+            Statement::ComplexVar(_) |
             Statement::Unary(_,_) => true,
             _ => false,
         }
