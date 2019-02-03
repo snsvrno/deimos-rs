@@ -27,13 +27,9 @@ impl Repl {
         let scanner = Scanner::init(code).scan()?;
         let parser = Parser::from_scanner(scanner)?;
 
-        let mut result = Statement::Empty;
-
-        let (_code,chunks) = parser.disassemble();
-        for chunk in chunks.iter() { 
-            result = chunk.eval(&mut self.scope)?;
-        }
-
+        let (_code,chunk) = parser.disassemble(); 
+        let result = chunk.eval(&mut self.scope)?;
+        
         Ok(result)
     }
 

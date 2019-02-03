@@ -11,25 +11,48 @@ enum ParserMode {
 
 pub struct Parser<'a> {
     raw_code : &'a str,
-    chunks : Vec<Chunk>,
+    chunk : Chunk,
 }
 
 impl<'a> Parser<'a> {
     
     pub fn from_scanner(scanner : Scanner <'a>) -> Result<Parser,Error> {
-        /// creates a parser from a scanner.
-        ///
-        /// takes all the scanned tokens and organizes them into a tree 
-        /// that represents the code.
+        //! creates a parser from a scanner.
+        //!
+        //! takes all the scanned tokens and organizes them into a tree 
+        //! that represents the code.
 
         // explodes the scanner object and gets the pieces that matter
         let (raw_code, tokens) = scanner.disassemble();
         // converts the tokens into Statements so they can be processessed
         let mut raw_statements = Statement::tokens_to_statements(tokens);
-        // empty chunks for processesing
-        let mut chunks : Vec<Chunk> = Vec::new();
 
+        // there is ultimately just 1 single chunk in a program, this is that chunk
+        // all other statements and such are organized inside this chunk or recusively
+        // deeper in there as additional chunks.
+        let master_chunk = Parser::processess(&mut raw_statements)?;
+
+        Ok(Parser {
+            raw_code : raw_code,
+            chunk : master_chunk,
+        })
         
+    }
+
+    pub fn disassemble(self) -> (&'a str, Chunk) {
+        //! explodes the parser object for its next step in the life journey
+        
+        (self.raw_code,self.chunk)
+    }
+
+    fn processess(mut raw_statements : &mut Vec<Statement>) -> Result<Chunk,Error> {
+        //! the main processessing function, looks at the statements and returns a chunk
+        //! 
+        //! this function process the major blocks of codes, things that separate chunks or
+        //! blocks, such as `do-end` loops, `if-else-end` blocks, function definitions, etc.
+        //! this shouldn't be processess variable assignments or the smaller things that happen
+        //! within a statement
+
         let mut working_phrase : Vec<Statement> = Vec::new();
         let mut current_chunk : Chunk = Chunk::empty();
 
@@ -48,6 +71,7 @@ impl<'a> Parser<'a> {
             // things that would cause a creation of a different chunk, like `do-end`
             // `if-else-end`, etc ... things that are different loops and scopes
             match token.as_token_type() {
+                // statement enders.
                 TokenType::EOF |
                 TokenType::EOL => {
                     if working_phrase.len() > 0 {
@@ -57,22 +81,29 @@ impl<'a> Parser<'a> {
                         working_phrase = Vec::new();
                     }
                 }, 
+
+                // function definition block
+                TokenType::Function => {
+                    // need to get the function name and parameters
+                    let preamble_section = Parser::consume_until(&mut raw_statements, 0, &[TokenType::RightParen])?;
+                    raw_statements.remove(0); // removes the right Parenthesis that remains.
+
+                    println!("<PREAM>");
+                    for i in 0 .. preamble_section.len() { println!("{} : {}",i,preamble_section[i]); }
+
+                    // function content
+                    let insides = Parser::consume_until_check_for_grouping(&mut raw_statements, 1, &[TokenType::End])?;
+                    
+                    println!("<INSIDES>");
+                    for i in 0 .. insides.len() { println!("{} : {}",i,insides[i]); }
+                },
+
+                // nothing here, so continue to add to the working_phrase.
                 _ => working_phrase.push(token),
             }
         }
 
-        // adds the dangling chunk if not empty
-        if !current_chunk.is_empty() { chunks.push(current_chunk); }
-
-        Ok(Parser {
-            raw_code : raw_code,
-            chunks : chunks,
-        })
-        
-    }
-
-    pub fn disassemble(self) -> (&'a str, Vec<Chunk>) {
-        (self.raw_code,self.chunks)
+        Ok(current_chunk)
     }
 
     fn collapse_statement(mode : ParserMode, mut working_phrase : Vec<Statement>) -> Result<Statement,Error> {
@@ -92,6 +123,7 @@ impl<'a> Parser<'a> {
             if pos >= working_phrase.len() { break; }
 
             // unary operation
+            //      `not true`
             if working_phrase[pos].is_unop() {
                if pos == 0 || (if pos > 0 { working_phrase[pos-1].is_expr() == false } else { true }) {
                     let expr = Parser::consume_check_for_grouping(mode, &mut working_phrase, pos+1)?;
@@ -105,6 +137,7 @@ impl<'a> Parser<'a> {
             }
 
             // binary operation
+            //      `5 + 3`
             if working_phrase[pos].is_binop() {
                 if pos > 0 && working_phrase.len() > pos {
                     // expr2 could not be a collapsed grouping here
@@ -125,6 +158,7 @@ impl<'a> Parser<'a> {
 
             // commas
             // creates a list of some sort.
+            //      `x,y,z,a` and `1,2,3,4` of `x,y,z,a = 1,2,3,4`
             if working_phrase[pos].is_token(TokenType::Comma) {
                 if pos > 0 && working_phrase.len() > pos {
                     
@@ -158,6 +192,7 @@ impl<'a> Parser<'a> {
             }
 
             // table access, bracket
+            //      `x[4]`
             if working_phrase[pos].is_token(TokenType::LeftBracket) {
                 if pos > 0 && working_phrase.len() > pos {
 
@@ -186,7 +221,8 @@ impl<'a> Parser<'a> {
                 }
             }
 
-            // table access. dot
+            // table access, dot
+            //      `x.y`
             if working_phrase[pos].is_token(TokenType::Period) {
                 if pos > 0 && working_phrase.len() > pos {
                     if working_phrase[pos+1].is_name() {
@@ -221,6 +257,8 @@ impl<'a> Parser<'a> {
             }
 
             // table constructor
+            //      `{ 1,2,3,4 }`
+            //      `{ 1,2,x=4,y={1,2}}`
             if working_phrase[pos].is_token(TokenType::LeftMoustache) {
                 if working_phrase.len() > pos {
                     // lets a flag to let it know that is trying to work inside a table.
@@ -245,6 +283,7 @@ impl<'a> Parser<'a> {
             }
             
             // assignments
+            //      `x = 1`
             if working_phrase[pos].is_token(TokenType::Equal) {
                 if pos > 0 && working_phrase.len() > pos {
                     
@@ -283,6 +322,7 @@ impl<'a> Parser<'a> {
             }
 
             // grouping
+            //      `(3+4)`
             if working_phrase[pos].is_token(TokenType::LeftParen) {
 
                 let grouped_statement = Parser::consume_check_for_grouping(mode, &mut working_phrase,pos)?;
@@ -323,7 +363,29 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn consume_until(working_phrase : &mut Vec<Statement>, start : usize, tokens : &[TokenType]) -> Result<Vec<Statement>, Error> {
+        //! basic consuming function that will read the tokens and stop at one of the desired tokens in `tokens`.
+        //! 
+        //! it will NOT consume the token define in `tokens` and will need to manually be removed (such as with `working_phrase.remove(0)`)
+        //! it WILL include the token at `pos = start`
+        //! 
+        //! does not do any grouping or smart parsing, just finds the first occurance of the token in question and returns a list of tokens
+        
+        let mut stop_point = working_phrase.len();
+
+        for token in tokens.iter() {
+            if let Ok(found) = Parser::find_next_token_of(working_phrase,start,token.clone()) {
+                if found < stop_point { stop_point = found; }
+            }
+        }
+
+        let tokens : Vec<Statement> = working_phrase.drain(start .. stop_point).collect();
+        Ok(tokens) 
+    }
+
     fn consume_until_check_for_grouping(working_phrase : &mut Vec<Statement>, start : usize, tokens : &[TokenType]) -> Result<Vec<Statement>, Error> {
+        //! smarter consuming function that will listen to grouping rules when consuming. similar to `consume_until` except it cares about grouping.
+        
         let mut stop_point = working_phrase.len();
         
         for token in tokens.iter() {
@@ -358,7 +420,34 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn find_next_token_of(working_phrase : &Vec<Statement>, start : usize, token : TokenType) -> Result<usize,Error> {
+        //! basic search function that finds the next occurance of the desired `token` and returns its position
+        
+        let mut pos = start;
+
+        loop {
+            if pos >= working_phrase.len() { break; }
+
+            if working_phrase[pos].is_token_ref(&token){
+                return Ok(pos);
+            }
+
+            pos += 1;
+        }
+
+        Err(format_err!("Can't find expected end of phrase {}",token))
+    }
+
     fn find_token_with_depth(working_phrase : &Vec<Statement>, start : usize, token : TokenType) -> Result<usize,Error> {
+        //! smart search function that will only return the position if it finds the `token` with the acceptable `depth`
+        //! 
+        //! respects grouping performed by `() {} []`, so if requesting a RightParen `)` for the following ...
+        //! ```text
+        //!     x = 5 + (4 * (6-4))
+        //! ```
+        //! it will find the last parentheses, and return that position, not the first right parenthesis because 
+        //! the grouping isn't finished yet
+
         let mut pos = start;
         let mut depth = match token {
             TokenType::RightParen | 

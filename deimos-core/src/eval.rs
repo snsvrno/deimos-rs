@@ -13,16 +13,13 @@ pub struct Eval<'a> {
 impl<'a> Eval<'a> {
     pub fn from_parser(parser : Parser<'a>) -> Result<Eval,Error> {
         let mut variables = Scope::new();
-        let (code,chunks) = parser.disassemble();
+        let (code,chunk) = parser.disassemble();
 
-        let mut result = Statement::Empty;
-
-        for chunk in chunks.iter() {
-            if let Statement::Return(chunk_result) = chunk.eval(&mut variables)?{
-                result = *chunk_result;   
-            }
-        }
-
+        let result : Statement = match chunk.eval(&mut variables)? {
+            Statement::Return(chunk_result) => *chunk_result,
+            _ => Statement::Empty,
+        };
+        
         Ok(Eval{
             raw_code : code,
             variables,
