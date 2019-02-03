@@ -14,8 +14,6 @@ pub struct Parser<'a> {
     chunks : Vec<Chunk>,
 }
 
-static mut MODE : ParserMode = ParserMode::Normal;
-
 impl<'a> Parser<'a> {
     
     pub fn from_scanner(scanner : Scanner <'a>) -> Result<Parser,Error> {

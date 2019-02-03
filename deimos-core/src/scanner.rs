@@ -62,7 +62,17 @@ impl<'a> Scanner <'a> {
             self.tokens.push(token);
         }
 
+        self.start_pos = 0;
         Ok(self)
+    }
+
+    pub fn token<'b>(&'b mut self) -> Option<&'b Token> {
+        if self.start_pos < self.tokens.len() {
+            self.start_pos += 1;
+            Some(&self.tokens[self.start_pos - 1])
+        } else {
+            None
+        }
     }
 
     pub fn disassemble(self) -> (&'a str, Vec<Token>) {

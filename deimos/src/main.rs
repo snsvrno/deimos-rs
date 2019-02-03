@@ -95,13 +95,20 @@ fn interactive_mode(options : &Options) {
     print_version_string();
     
     let prompt = get_prompt();
+    let mut prompt_extra = String::new();
     let mut input = String::new();
     let mut repl = deimos_core::Repl::new();
 
     loop {
-        print!("{}",&prompt);
+        print!("{}{}",&prompt,&prompt_extra);
         let _ = stdout().flush();
         stdin().read_line(&mut input);
+
+        match deimos_core::Repl::check_for_complete_statement(&input) {
+            Ok(false) => { prompt_extra = format!(">"); continue },
+            Err(error) => println!("ERROR : {}",error),
+            Ok(true) => prompt_extra = String::new(),
+        }
 
         match repl.add(&input) {
             Err(error) => println!("ERROR : {}",error),
@@ -115,6 +122,7 @@ fn interactive_mode(options : &Options) {
                 }
             },
         }
+
         input = String::new();
     }
 }

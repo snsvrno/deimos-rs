@@ -1,4 +1,4 @@
-use crate::elements::Statement;
+use crate::elements::{ Statement, Token, TokenType };
 use crate::scanner::Scanner;
 use crate::parser::Parser;
 use crate::elements::Scope;
@@ -35,5 +35,36 @@ impl Repl {
         }
 
         Ok(result)
+    }
+
+    pub fn check_for_complete_statement(text : &str) -> Result<bool,Error> {
+        //! makes s token stream out of a text string, and then checks to see
+        //! if it is a complete statement or not.
+        //! 
+        //! designed to allow multi line input in a repl like envirnoment
+        
+        let mut scanner = Scanner::init(text).scan()?;
+        let mut depth = 0;
+        
+        loop {
+            match scanner.token() {
+                None => break,
+                Some(token) => {
+                    match token.get_type() {
+                        TokenType::Function |
+                        TokenType::Do => depth += 1,
+
+                        TokenType::End => depth -= 1,
+                        _ => (),
+                    }
+                }
+            }
+        }
+
+        if depth == 0 {
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 }
