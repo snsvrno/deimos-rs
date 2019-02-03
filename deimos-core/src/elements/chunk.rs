@@ -3,7 +3,7 @@ use failure::Error;
 use crate::elements::Statement;
 use crate::elements::Scope;
 
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Clone)]
 pub struct Chunk {
     statements : Vec<Statement>,
 }
@@ -27,7 +27,7 @@ impl Chunk {
 
     pub fn eval(&self, mut scope : &mut Scope) -> Result<Statement,Error> {
         let mut result = Statement::Empty;
-        
+
         for stat in self.statements.iter() {
             result = stat.eval(&mut scope)?;
         }

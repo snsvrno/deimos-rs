@@ -30,7 +30,7 @@ impl<'a> Parser<'a> {
         // there is ultimately just 1 single chunk in a program, this is that chunk
         // all other statements and such are organized inside this chunk or recusively
         // deeper in there as additional chunks.
-        let master_chunk = Parser::processess(&mut raw_statements)?;
+        let master_chunk = Parser::process(&mut raw_statements)?;
 
         Ok(Parser {
             raw_code : raw_code,
@@ -45,7 +45,7 @@ impl<'a> Parser<'a> {
         (self.raw_code,self.chunk)
     }
 
-    fn processess(mut raw_statements : &mut Vec<Statement>) -> Result<Chunk,Error> {
+    fn process(mut raw_statements : &mut Vec<Statement>) -> Result<Chunk,Error> {
         //! the main processessing function, looks at the statements and returns a chunk
         //! 
         //! this function process the major blocks of codes, things that separate chunks or
@@ -75,6 +75,7 @@ impl<'a> Parser<'a> {
                 TokenType::EOF |
                 TokenType::EOL => {
                     if working_phrase.len() > 0 {
+                        
                         let state = Parser::collapse_statement(ParserMode::Normal, working_phrase)?;
                         current_chunk.add(state);
                         // creating new objects that we just used.
@@ -84,18 +85,38 @@ impl<'a> Parser<'a> {
 
                 // function definition block
                 TokenType::Function => {
-                    // need to get the function name and parameters
-                    let preamble_section = Parser::consume_until(&mut raw_statements, 0, &[TokenType::RightParen])?;
-                    raw_statements.remove(0); // removes the right Parenthesis that remains.
 
-                    println!("<PREAM>");
-                    for i in 0 .. preamble_section.len() { println!("{} : {}",i,preamble_section[i]); }
+                    // need to get the function name and parameters.
+                    let func_name =  {
+                        let function_name = Parser::consume_until(&mut raw_statements, 0, &[TokenType::LeftParen])?;
+                        Parser::remove_all_until(&mut raw_statements, 0, TokenType::LeftParen)?; // removes the left Parenthesis that remains.
+                        Parser::collapse_statement(ParserMode::Normal, function_name)?
+                    };
 
-                    // function content
-                    let insides = Parser::consume_until_check_for_grouping(&mut raw_statements, 1, &[TokenType::End])?;
-                    
-                    println!("<INSIDES>");
-                    for i in 0 .. insides.len() { println!("{} : {}",i,insides[i]); }
+                    // function parameters / arglist, checks type to make sure it is a namelist.
+                    let args = {
+                        let preamble_section = Parser::consume_until(&mut raw_statements, 0, &[TokenType::RightParen])?;
+                        Parser::remove_all_until(&mut raw_statements, 0, TokenType::RightParen)?; // removes the right Parenthesis that remains.
+                            let args = Parser::collapse_statement(ParserMode::Normal, preamble_section)?.into_list_or_empty();
+
+                        if !(args.is_a_list() && args.is_namelist() || args.is_empty()) {
+                            return Err(format_err!("Function arguments must be names! : {}",args));
+                        }
+                        args
+                    };
+
+                    // function content, the chunk, and creates the function object
+                    let func = {
+                        let mut insides = Parser::consume_until_check_for_grouping(&mut raw_statements, 1, &[TokenType::End])?;
+                        Parser::remove_all_until(&mut raw_statements, 0, TokenType::End)?; // removes the end that remains.
+                        let collapsed_insides = Parser::process(&mut insides)?;
+                        
+                        Statement::Function(Box::new(args), collapsed_insides)
+                    };
+
+                    // all functions are nameless, and are assigned to things like variables (at least that is how they are being treated)
+                    let assignment = Statement::create_assignment(func_name,func,false);
+                    working_phrase.push(assignment);
                 },
 
                 // nothing here, so continue to add to the working_phrase.
@@ -436,6 +457,21 @@ impl<'a> Parser<'a> {
         }
 
         Err(format_err!("Can't find expected end of phrase {}",token))
+    }
+
+    fn remove_all_until(working_phrase : &mut Vec<Statement>, start : usize, token : TokenType) -> Result<(),Error> {
+        //! goes through the stream and removes all tokens until the one `token` desired, removing that token aswell.
+        
+        loop {
+            if working_phrase.len() <= start { break; }
+
+            let current_token = working_phrase.remove(start);
+            if current_token.as_token_type() == &token {
+                return Ok(())
+            }
+        }
+
+        Err(format_err!("Couldn't find desired token {}",token))
     }
 
     fn find_token_with_depth(working_phrase : &Vec<Statement>, start : usize, token : TokenType) -> Result<usize,Error> {

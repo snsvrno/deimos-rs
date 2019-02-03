@@ -1,16 +1,10 @@
 /// all references to a spec are from the [lua 5.1 spec](https://www.lua.org/manual/5.1/manual.html#8)
 
+use std::collections::HashMap;
+
 use failure::{Error,format_err};
 
-use crate::elements::Token;
-use crate::elements::TokenType;
-
-use crate::elements::CodeSlice;
-use crate::elements::Scope;
-
-use crate::elements::statement_evals;
-
-use std::collections::HashMap;
+use crate::elements::{ Token, TokenType, Chunk, Scope, CodeSlice, statement_evals };
 
 #[derive(PartialEq,Clone,Debug,Hash,Eq)]
 pub enum TableIndex {
@@ -36,6 +30,7 @@ impl std::fmt::Display for TableIndex {
     }
 }
 
+// TODO : gradually replace `Vec<Box<Statement>>` with `Chunk`
 #[derive(PartialEq,Debug,Clone)]
 pub enum Statement {
     Empty,
@@ -64,9 +59,9 @@ pub enum Statement {
     Assignment(Box<Statement>,Box<Statement>),                 // varlist `=´ explist
     AssignmentLocal(Box<Statement>,Box<Statement>),            // local namelist [`=´ explist] 
 
-    Function(Vec<String>,Vec<Box<Statement>>),                      // funcbody ::= `(´ [parlist] `)´ block end
-    FunctionNamed(String,Vec<String>,Vec<Box<Statement>>),          // funcbody ::= name`(´ [parlist] `)´ block end
+    Function(Box<Statement>,Chunk),                                // funcbody ::= `(´ [parlist] `)´ block end
     FunctionCall(Box<Statement>,Box<Statement>),                       
+    
     Return(Box<Statement>),                                         // laststat ::= return [explist] | break
 }
 
@@ -96,19 +91,16 @@ impl Statement {
                     } else {
                         Statement::Empty
                     };
-                    scope.assign_local(&args[i],value);
+                    scope.assign_local(args.as_namelist_index(i),value);
                 }
 
                 let mut returned = Statement::Empty;
                 
                 // evaluating the function
-                for line in content.iter() {
-                    let result = line.eval(&mut scope)?;
-                    if let Statement::Return(result) = result {
-                        returned = *result;                        
-                        break;
-                    }
-                }
+                let returned = match content.eval(&mut scope)? {
+                    Statement::Return(result) => *result,
+                    _ => Statement::Empty,
+                };
 
                 scope.pop_local();
                 Ok(returned)
@@ -173,11 +165,17 @@ impl Statement {
                 let result = stat.eval(scope)?;
                 Ok(Statement::Return(Box::new(result)))
             },
+            Statement::Function(_,_) => {
+                // we don't evaluate function definitions, so we should just 
+                // pass the function on
+                Ok(self.clone())
+            },
+            /*
             Statement::FunctionNamed(ref name,ref args,ref content) => {
                 let func =Statement::Function(args.clone(),content.clone());
                 scope.register_function(name,func);
                 Ok(Statement::Empty)
-            },
+            },*/
             Statement::FunctionCall(ref name,ref args) => {
                 scope.eval_function(&name.as_name(),&args)
             },
@@ -221,11 +219,14 @@ impl Statement {
                 //
                 // and actually swap the two values.
             
-                let mut results : Vec<Statement> = Vec::new();
+                // let mut results : Vec<Statement> = Vec::new();
 
                 /*for ex in exprs.as_list() {
                     results.push(ex.eval(&mut scope)?);
                 }*/
+
+                // if we are assigning a function to a variable we don't evaluate anything,
+                // instead we just need to make the assignment
 
                 let val_exprs = exprs.eval(&mut scope)?;
 
@@ -382,6 +383,13 @@ impl Statement {
     pub fn as_namelist<'a>(&'a self) -> &'a Vec<String> {
         match self {
             Statement::NameList(ref list) => &list,
+            _ => panic!("Cannot unwrap {:?} as a name list",self),
+        }
+    }
+
+    pub fn as_namelist_index<'a>(&'a self, i : usize) -> &'a str {
+        match self {
+            Statement::NameList(ref list) => &list[i],
             _ => panic!("Cannot unwrap {:?} as a name list",self),
         }
     }
@@ -549,6 +557,13 @@ impl Statement {
             _ => false,
         }
 
+    }
+
+    pub fn is_function(&self) -> bool {
+        match self {
+            Statement::Function(_,_) => true,
+            _ => false,
+        }
     }
 
     pub fn is_exprlist(&self) -> bool {
@@ -943,6 +958,11 @@ impl Statement {
         }
     }
 
+    pub fn into_list_or_empty(self) -> Statement {
+        if self.is_empty() { self }
+        else { self.into_list() }
+    }
+
     pub fn into_unary(self,expr : Statement) -> Statement {
         if !self.is_unop() { panic!("Cannot make {:?} into unary, not an operator.",self); }
         if !expr.is_expr() { panic!("Cannot make unary, {:?} isn't an expression.",expr); }
@@ -1248,8 +1268,7 @@ impl std::fmt::Display for Statement {
             Statement::AssignmentLocal(varlist,exprlist) => write!(f,"(= local {} {})",&varlist,&exprlist),
             
             Statement::FunctionCall(name,args) => write!(f,"(fncall<{}> {})",name,&args),
-            Statement::Function(args,body) => write!(f,"(fn<{}> {} end)",Statement::render_strings(&args),Statement::render_list(&body)),
-            Statement::FunctionNamed(name,args,body) => write!(f,"(fn {}<{}> {} end)",name,Statement::render_strings(&args),Statement::render_list(&body)),
+            Statement::Function(args,body) => write!(f,"(fn<{}> {} end)",&args,&body),
             Statement::Return(list) => write!(f,"(return {})",&list),
             Statement::ComplexVar(access) => write!(f, "{}",Statement::render_complex_var(&access)),
             

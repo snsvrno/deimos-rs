@@ -14,7 +14,7 @@ impl<'a> Eval<'a> {
     pub fn from_parser(parser : Parser<'a>) -> Result<Eval,Error> {
         let mut variables = Scope::new();
         let (code,chunk) = parser.disassemble();
-
+        
         let result : Statement = match chunk.eval(&mut variables)? {
             Statement::Return(chunk_result) => *chunk_result,
             _ => Statement::Empty,
