@@ -27,7 +27,7 @@ impl<'a> Eval<'a> {
         })
     }
 
-    pub fn get_value<'b>(&'b self, var_name : &str) -> Option<&'b Statement> {
+    pub fn get_value<'b>(&'b self, var_name : &str) -> Result<Option<&'b Statement>,Error> {
         self.variables.get_value(var_name)
     }
 

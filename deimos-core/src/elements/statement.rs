@@ -131,7 +131,7 @@ impl Statement {
                     string
                 };
 
-                match scope.get_value(&var_name) {
+                match scope.get_value(&var_name)? {
                     Some(value) => Ok(value.clone()),
                     None => Ok(Statement::Empty),
                 }
@@ -140,7 +140,7 @@ impl Statement {
                 let mut return_list : Vec<Box<Statement>> = Vec::new();
 
                 for name in list.iter() {
-                    let value : Statement = match scope.get_value(&name) {
+                    let value : Statement = match scope.get_value(&name)? {
                         None => Statement::Empty,
                         Some(value) => value.clone(),
                     };
@@ -227,7 +227,6 @@ impl Statement {
 
                 // if we are assigning a function to a variable we don't evaluate anything,
                 // instead we just need to make the assignment
-
                 let val_exprs = exprs.eval(&mut scope)?;
 
                 if vars.is_namelist() {
@@ -248,6 +247,27 @@ impl Statement {
                         };
 
                         match *list[i] {
+                            Statement::ComplexVar(ref address) => {
+                                let var_name = {
+                                    let mut string = String::new();
+
+                                    for j in 0 .. address.len() {
+                                        // needs to evaluate each piece, because what if we put some logic in there or something
+                                        // like `x[y+1]`
+
+                                        if j == 0 {
+                                            let section : Statement = if address[j].is_name() { *address[j].clone() } else { address[j].eval(scope)? };
+                                            string = format!("{}",section.as_user_output().unwrap());
+                                        } else {
+                                            let section = address[j].eval(scope)?;
+                                            string = format!("{}[{}]",string,section.as_user_output().unwrap());
+                                        }
+                                    }
+
+                                    string
+                                };
+                                scope.assign(&var_name,value)?;
+                            },
                             Statement::Token(ref token) => match token.get_type() {
                                 TokenType::Identifier(ref var_name) => {
                                     scope.assign(&var_name,value)?;
@@ -262,7 +282,7 @@ impl Statement {
                 Ok(Statement::Empty)
             },
             Statement::Token(ref token) => match token.get_type() {
-                TokenType::Identifier(ref var_name) => match scope.get_value(var_name) {
+                TokenType::Identifier(ref var_name) => match scope.get_value(var_name)? {
                     Some(value) => Ok(value.clone()),
                     None => Ok(Statement::Empty),
                 },
@@ -508,6 +528,13 @@ impl Statement {
             true
         } else {
             false
+        }
+    }
+
+    pub fn is_table(&self) -> bool {
+        match self {
+            Statement::Table(_) => true,
+            _ => false,
         }
     }
 
@@ -801,12 +828,13 @@ impl Statement {
         //! ```test
         //! 
         //!     [x]    Name
-        //!     [ ]    prefixexp `[´ exp `]´
-        //!     [ ]    prefixexp `.´ Name 
+        //!     [x]    prefixexp `[´ exp `]´
+        //!     [x]    prefixexp `.´ Name 
         //! 
         //! ```
         
         match self {
+            Statement::ComplexVar(_) => true,
             Statement::Token(token) => {
                 match token.get_type() {
                     TokenType::Identifier(_) => true,

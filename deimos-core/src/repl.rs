@@ -7,7 +7,6 @@ use failure::{Error,format_err};
 
 pub struct Repl {
     code : String,
-    statements : Vec<Statement>,
     scope : Scope,
 }
 
@@ -15,7 +14,6 @@ impl Repl {
     pub fn new() -> Repl {
         Repl {
             code : String::new(),
-            statements : Vec::new(),
             scope : Scope::new(),
         }
     }
