@@ -2,6 +2,9 @@ use std::env;
 use std::io::{stdin,stdout,Write,prelude::*};
 use std::fs::File;
 
+use log::{error, debug, info};
+use pretty_env_logger;
+
 use deimos_core;
 
 pub struct Options {
@@ -9,6 +12,7 @@ pub struct Options {
     pub interactive_mode : bool,
     pub run_file : Option<String>,
     pub load_file : Vec<String>,
+    pub file_args : Vec<String>,
 }
 
 impl Default for Options {
@@ -17,6 +21,7 @@ impl Default for Options {
             show_every_result : false,
             interactive_mode : false,
             run_file : None,
+            file_args : Vec::new(),
             load_file : Vec::new(),
         }
     }
@@ -24,6 +29,9 @@ impl Default for Options {
 
 
 fn main() {
+    // initalizes the logger
+    pretty_env_logger::init();
+
     let args: Vec<String> = env::args().collect();
     let mut options : Options = Options::default();
 
@@ -41,7 +49,13 @@ fn main() {
             "-i" => options.interactive_mode = true,
             "-l" => { options.load_file.push(args[i+1].to_string()); i += 1; }
             "-e" => { options.run_file = Some(args[i+1].to_string()); i += 1; }
-            _ => ()
+            string => match &string[0 .. 1] {
+                "-" => { error!("Found argument '{}' which wasn't expected, or isn't valid in this context",string); },
+                _ => {
+                    if options.run_file.is_none() { options.run_file = Some(string.to_string()); }
+                    else { options.file_args.push(string.to_string()); }
+                }
+            }
         }
         i += 1;
     }
@@ -51,7 +65,7 @@ fn main() {
 
 fn process_args(options : &Options) {
     for i in 0 .. options.load_file.len() {
-        println!("load file: {}",options.load_file[i]);
+        info!("loading file: {}",options.load_file[i]);
     }
     
     if options.interactive_mode {
@@ -75,14 +89,14 @@ fn get_prompt() -> String {
 
 fn run_file(file_path : &str, options : &Options) {
     match File::open(file_path) {
-        Err(error) => println!("ERROR : {}",error),
+        Err(error) => error!("{}",error),
         Ok(mut file) => {
             let mut buffer : String = String::new();
             match file.read_to_string(&mut buffer) {
-                Err(error) => println!("ERROR : {}",error),
+                Err(error) => error!("{}",error),
                 Ok(_) => {
                     match deimos_core::run(&buffer) {
-                        Err(error) => println!("ERROR : {}",error),
+                        Err(error) => error!("{}",error),
                         Ok(result) => if !result.is_empty() { println!("{}",result); },
                     }
                 }
@@ -106,17 +120,17 @@ fn interactive_mode(options : &Options) {
 
         match deimos_core::Repl::check_for_complete_statement(&input) {
             Ok(false) => { prompt_extra = format!(">"); continue },
-            Err(error) => println!("ERROR : {}",error),
+            Err(error) => error!("{}",error),
             Ok(true) => prompt_extra = String::new(),
         }
 
         match repl.add(&input) {
-            Err(error) => println!("ERROR : {}",error),
+            Err(error) => error!("{}",error),
             Ok(result) => { 
                 if options.show_every_result {
                     if let Some(text) = result.as_user_output() {
                         if text != "nil" {
-                            println!("d: {}",text);
+                            debug!("d: {}",text);
                         }
                     }
                 }

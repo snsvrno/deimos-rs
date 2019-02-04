@@ -6,4 +6,6 @@ edition = "2018"
 
 [dependencies]
 failure = "0.1"
+log = "0.4"
+pretty_env_logger = "0.3"
 deimos-core = { version = "0.1.0", path = "../deimos-core/"}
