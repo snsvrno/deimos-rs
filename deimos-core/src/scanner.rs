@@ -52,10 +52,27 @@ impl<'a> Scanner<'a> {
             }
         }
 
+        // now we will clean all whitespace, because
+        // those are not needed / not important to the 
+        // actual function of the tokens
+        self.trim_whitespace();
+
         Ok(self)
     }
 
     // PRIVATE FUNCTIONS ///////////////////////
+
+    fn trim_whitespace(&mut self) {
+        //! removes whitespace tokens from the token list
+        
+        let all_tokens : Vec<Token> = self.tokens.drain(..).collect();
+
+        for token in all_tokens {
+            if token != Token::WhiteSpace {
+                self.tokens.push(token);
+            }
+        }
+    }
 
     fn scan_next_token(&mut self) -> Result<Token,Error> {
         //! scans the raw code and returns the next token,
@@ -493,13 +510,13 @@ mod tests {
         match scanner {
             Ok(scanner) => {
                 assert_eq!(scanner.tokens[0],Token::Number(1.0));
-                assert_eq!(scanner.tokens[2],Token::Number(2.0));
-                assert_eq!(scanner.tokens[4],Token::Number(3.0));
-                assert_eq!(scanner.tokens[6],Token::Number(4.0));
-                assert_eq!(scanner.tokens[8],Token::Number(5.0));
-                assert_eq!(scanner.tokens[10],Token::Number(0.1233));
-                assert_eq!(scanner.tokens[12],Token::Number(0.1232));
-                assert_eq!(scanner.tokens[14],Token::Number(123.3));
+                assert_eq!(scanner.tokens[1],Token::Number(2.0));
+                assert_eq!(scanner.tokens[2],Token::Number(3.0));
+                assert_eq!(scanner.tokens[3],Token::Number(4.0));
+                assert_eq!(scanner.tokens[4],Token::Number(5.0));
+                assert_eq!(scanner.tokens[5],Token::Number(0.1233));
+                assert_eq!(scanner.tokens[6],Token::Number(0.1232));
+                assert_eq!(scanner.tokens[7],Token::Number(123.3));
             },
             Err(error) => println!("{}",error),
         }
@@ -530,13 +547,13 @@ mod tests {
 
         let scanner = Scanner::init(&code).scan();
         let tokens : Vec<Token> = vec![Token::EOL,
-        /* 1  */    Token::WhiteSpace, Token::Comment(" taken from my old pixelscreen-love library".to_string()), Token::EOL,
-        /* 4  */    Token::WhiteSpace, Token::Local, Token::WhiteSpace, Token::Identifier("PIXELSCREEN".to_string()),
-        /* 8  */        Token::WhiteSpace, Token::Equal, Token::WhiteSpace, Token::LeftMoustache, Token::WhiteSpace, 
+        /* 1  */    Token::Comment(" taken from my old pixelscreen-love library".to_string()), Token::EOL,
+        /* 4  */    Token::Local, Token::Identifier("PIXELSCREEN".to_string()),
+        /* 8  */        Token::Equal, Token::LeftMoustache, 
         /* 13 */        Token::RightMoustache, Token::EOL,
         /* 15 */    Token::EOL,
-        /* 16 */    Token::WhiteSpace, Token::Identifier("PIXELSCREEN".to_string()), Token::Period, 
-        /* 19 */        Token::Identifier("primeInstance".to_string()), Token::WhiteSpace, Token::Equal, Token::WhiteSpace, 
+        /* 16 */    Token::Identifier("PIXELSCREEN".to_string()), Token::Period, 
+        /* 19 */        Token::Identifier("primeInstance".to_string()), Token::Equal, 
         /* 23  */       Token::Nil, Token::EOL  
         ];
         // got tired and didn't do any more...
