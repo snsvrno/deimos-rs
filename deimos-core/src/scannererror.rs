@@ -59,11 +59,13 @@ impl ScannerError {
         ScannerError::IC { info }.into()
     }
 
-    pub fn number_parsing(scanner : &Scanner) -> Error {
+    pub fn number_parsing(scanner : &Scanner, span : usize, description : &str) -> Error {
         //! creates an illegal or unknown character error,
         //! 
         
         let mut info = CodeInfo::from(scanner);
+        info.span = span;
+        info.description = description.to_string();
 
         ScannerError::NP { info }.into()
     }

@@ -1,3 +1,5 @@
+use crate::codewrap::CodeWrappable;
+
 #[derive(Debug,PartialEq)]
 pub enum Token {
     
@@ -37,6 +39,8 @@ pub enum Token {
     EOF,
 }
 
+impl CodeWrappable for Token { }
+
 impl Token {
 
     pub fn is_eol(char : &str) -> bool {
@@ -47,6 +51,18 @@ impl Token {
             _ => false,
         }
     }
+
+    pub fn is_whitespace(char : &str) -> bool {
+        //! checks if the string a valid whitespace character
+        //! this is kind of lie since we just mean empty space,
+        //! so we are checking for spaces and tabs
+        
+        match char {
+            " " => true,
+            _ => false,
+        }
+    }
+
     pub fn is_valid_number_char(char : &str) -> bool {
         //! checks if the single length character 
         //! is a valid character that couild be in a number

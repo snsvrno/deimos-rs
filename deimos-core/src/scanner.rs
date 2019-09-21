@@ -2,16 +2,30 @@ use failure::Error;
 
 use crate::token::Token;
 use crate::scannererror::ScannerError;
+use crate::parser::Parser;
+use crate::error::CodeInformation;
+use crate::codewrap::CodeWrap::CodeWrap;
+
+type TokenWrapped = crate::codewrap::CodeWrap<Token>;
 
 pub struct Scanner<'a> {
     pub file_name : String,
     pub raw_code : &'a str,
-    pub tokens : Vec<Token>,
+    pub tokens : Vec<TokenWrapped>,
 
     // working stuff, is public for error handling
     pub current_pos : usize,
     pub line_number : usize,
+    pub token_start : usize,
+    pub token_end : usize,
 } 
+
+impl<'a> CodeInformation for Scanner<'a> {
+    fn raw_code(&self) -> String { self.raw_code.to_string() }
+    fn cursor_pos(&self) -> usize { self.current_pos }
+    fn file_name(&self) -> String { self.file_name.to_string() }
+    fn line_number(&self) -> usize { self.line_number }
+}
 
 impl<'a> std::default::Default for Scanner<'a> {
     fn default() -> Scanner<'a> {
@@ -22,7 +36,9 @@ impl<'a> std::default::Default for Scanner<'a> {
 
             // working stuff
             current_pos : 0,
-            line_number : 0
+            line_number : 1,
+            token_start : 0,
+            token_end : 0,
         }
     }
 }
@@ -48,7 +64,13 @@ impl<'a> Scanner<'a> {
         loop {
             match self.scan_next_token()? {
                 Token::EOF => break,
-                token => self.tokens.push(token),
+                token => {
+                    if token == Token::EOL {
+                        self.line_number += 1;
+                    }
+
+                    self.tokens.push(CodeWrap(token, self.token_start, self.token_end))
+                },
             }
         }
 
@@ -60,12 +82,21 @@ impl<'a> Scanner<'a> {
         Ok(self)
     }
 
+    pub fn into_parser(mut self) -> Parser<'a> {
+        Parser {
+            raw_code : self.raw_code,
+            file_name : self.file_name,
+
+            .. Parser::default()
+        }
+    }
+
     // PRIVATE FUNCTIONS ///////////////////////
 
     fn trim_whitespace(&mut self) {
         //! removes whitespace tokens from the token list
         
-        let all_tokens : Vec<Token> = self.tokens.drain(..).collect();
+        let all_tokens : Vec<TokenWrapped> = self.tokens.drain(..).collect();
 
         for token in all_tokens {
             if token != Token::WhiteSpace {
@@ -269,13 +300,14 @@ impl<'a> Scanner<'a> {
         }
 
         if decimal_number > 1 {
-            return Err(ScannerError::number_parsing(self));
+            return Err(ScannerError::number_parsing(self,number.len(),
+                &format!("a number can't have more than 1 decimal point, found {}",decimal_number)));
         }
 
         if number == "." { return Ok(None); }
 
         match number.parse::<f32>() {
-            Err(error) => Err(ScannerError::number_parsing(self)),
+            Err(error) => Err(ScannerError::number_parsing(self,number.len(),"can't parse as number")),
             Ok(num) =>  {
                 self.current_pos = pos;
                 Ok(Some(Token::Number(num)))
@@ -468,66 +500,6 @@ mod tests {
     use crate::token::Token;
     use crate::scanner::Scanner;
 
-    fn tokens_type(t1 : &Token, t2 : &Token) -> bool {
-        //! testing helping function that lets use check token types
-        //! easier, and displays them when it fails assertion
-        
-        if !t1.is_same_type(t2) {
-            println!("tokens are not the same type\n  left:  {:?}\n  right: {:?}",t1,t2);
-            return false;
-        } 
-
-        true
-    }
-
-    #[test]
-    fn scanning_string() {
-        let code : String = String::from(
-            "\"string1\"'string number 2'[====[another string,\n\n\n longer \"which stuff\" in it]====]"
-        );
-
-        let scanner = Scanner::init(&code).scan();
-
-        match scanner {
-            Ok(scanner) => {
-                assert!(tokens_type(&Token::String("".to_string()), &scanner.tokens[0]));
-                assert!(tokens_type(&Token::String("".to_string()), &scanner.tokens[1]));
-                assert!(tokens_type(&Token::MultiLineString("".to_string()), &scanner.tokens[2]));
-
-                assert_eq!("string1",&scanner.tokens[0].inner_text());
-                assert_eq!("string number 2",&scanner.tokens[1].inner_text());
-                assert_eq!("another string,\n\n\n longer \"which stuff\" in it",&scanner.tokens[2].inner_text());
-            },
-            Err(error) => println!("{}",error),
-        }
-    }
-
-    #[test]
-    fn scanning_numbers() {
-        let code : String = String::from("1 2 3 4 5 0.1233 .1232 123.3");
-        let scanner = Scanner::init(&code).scan();
-
-        match scanner {
-            Ok(scanner) => {
-                assert_eq!(scanner.tokens[0],Token::Number(1.0));
-                assert_eq!(scanner.tokens[1],Token::Number(2.0));
-                assert_eq!(scanner.tokens[2],Token::Number(3.0));
-                assert_eq!(scanner.tokens[3],Token::Number(4.0));
-                assert_eq!(scanner.tokens[4],Token::Number(5.0));
-                assert_eq!(scanner.tokens[5],Token::Number(0.1233));
-                assert_eq!(scanner.tokens[6],Token::Number(0.1232));
-                assert_eq!(scanner.tokens[7],Token::Number(123.3));
-            },
-            Err(error) => println!("{}",error),
-        }
-
-
-        let failing_code : String = String::from("123.2.3");
-        let scanner = Scanner::init(&failing_code).scan();
-
-        assert!(scanner.is_err());
-    }
-
     #[test]
     fn small_code_sample() {
         let code : String = String::from(r#"
@@ -541,6 +513,7 @@ mod tests {
               setmetatable(ps, self)
               self.__index = self
               ps:load(overrides)
+              local number = 0.232.2
               return ps
             end
         "#);
@@ -564,61 +537,12 @@ mod tests {
                 assert!(false);
             },
             Ok(scanner) => {
-                println!("{:?}",scanner.tokens);
 
                 for i in 0 .. tokens.len() {
                     println!("{}",i);
-                    assert_eq!(tokens[i],scanner.tokens[i]);
+                    assert_eq!(&tokens[i],scanner.tokens[i].item());
                 }
             },
-        }
-    }
-
-    #[test]
-    fn scanning_comments() {
-       
-        {
-            // single line simple
-            let code : String = String::from("--this is an example code");
-            let scanner = Scanner::init(&code).scan();
-
-            match scanner {
-                Ok(scanner) => {
-                    assert!(tokens_type(&Token::Comment("".to_string()), &scanner.tokens[0]));
-                    assert_eq!("this is an example code",&scanner.tokens[0].inner_text());
-                },
-                Err(error) => println!("{}",error),
-            }
-        }
-
-        {
-            // single line two of em
-            let code : String = String::from("--[[ annother comment here ]]--this is an example code");
-            let scanner = Scanner::init(&code).scan();
-
-            match scanner {
-                Ok(scanner) => {
-                    assert!(tokens_type(&Token::Comment("".to_string()), &scanner.tokens[0]));
-                    assert!(tokens_type(&Token::Comment("".to_string()), &scanner.tokens[1]));
-                    assert_eq!("this is an example code",&scanner.tokens[1].inner_text());
-                    assert_eq!(" annother comment here ",&scanner.tokens[0].inner_text());
-                },
-                Err(error) => println!("{}",error),
-            }
-        }
-
-        {
-            // multiline
-            let code : String = String::from("--[[ annother\n\n\n\n comment here ]]");
-            let scanner = Scanner::init(&code).scan();
-
-            match scanner {
-                Ok(scanner) => {
-                    assert!(tokens_type(&Token::Comment("".to_string()), &scanner.tokens[0]));
-                    assert_eq!(" annother\n\n\n\n comment here ",&scanner.tokens[0].inner_text());
-                },
-                Err(error) => println!("{}",error),
-            }
         }
     }
 }
