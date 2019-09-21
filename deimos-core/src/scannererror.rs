@@ -33,6 +33,7 @@ impl fmt::Display for ScannerError {
     }
 }
 
+#[allow(dead_code)]
 impl ScannerError {
     pub fn unterminated_code_segment(scanner : &Scanner, offset : usize, span : usize, description : &str) -> Error {
         //! creates an unterminated code segment error,

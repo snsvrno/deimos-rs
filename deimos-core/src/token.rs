@@ -1,6 +1,7 @@
 use crate::codewrap::CodeWrappable;
 
 #[derive(Debug,PartialEq)]
+#[allow(dead_code)]
 pub enum Token {
     
     // single-character tokens /////////////////////
@@ -41,6 +42,7 @@ pub enum Token {
 
 impl CodeWrappable for Token { }
 
+#[allow(dead_code)]
 impl Token {
 
     pub fn is_eol(char : &str) -> bool {

@@ -61,7 +61,7 @@ pub fn error_display(f : &mut fmt::Formatter<'_>, info : &CodeInfo, error_type :
             loop {
                 
                 // makes sure we don't access outside of the `raw_code`
-                if pos - 1 < 0 {
+                if pos == 0 {
                     break;
                 }
 
@@ -127,7 +127,7 @@ pub fn error_display(f : &mut fmt::Formatter<'_>, info : &CodeInfo, error_type :
         let line_number = {
             let mut number = String::new();
             number = format!(" {}",info.line_number);
-            for i in format!("{}",info.line_number).len() ..  4 {
+            for _ in format!("{}",info.line_number).len() ..  4 {
                 number = format!("{}{}",number," ");
             }
             number
@@ -138,11 +138,11 @@ pub fn error_display(f : &mut fmt::Formatter<'_>, info : &CodeInfo, error_type :
         let arrow = {
             let mut string = String::new();
 
-            for i in 0 .. info.span {
+            for _ in 0 .. info.span {
                 string = format!("{}{}",string,"^");
             }
 
-            for i in code_start .. info.pos - 1 {
+            for _ in code_start .. info.pos - 1 {
                 string = format!("{}{}"," ",string);
             }
 
