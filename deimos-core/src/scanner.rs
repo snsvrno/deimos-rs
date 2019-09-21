@@ -147,7 +147,7 @@ impl<'a> Scanner<'a> {
                    else { Token::Equal },
             "(" => Token::LeftParen,
             ")" => Token::RightParen,
-            "[" => if let Some(level) = self.scan_peek_multiline_string() { self.scan_token_multiline_string(level)? } 
+            "[" => if let Some(level) = self.scan_peek_multiline_block() { self.scan_token_multiline_string(level)? } 
                    else { Token::LeftBracket },
             "]" => Token::RightBracket,
             "{" => Token::LeftMoustache,
@@ -160,7 +160,7 @@ impl<'a> Scanner<'a> {
                    else if let Some(num) = self.scan_peek_token_number(".")? { num }
                    else { Token::Period },
             "~" => if self.scan_peek("=") { Token::NotEqual } 
-                   else { return Err(ScannerError::illegal_character(self)) },
+                   else { return Err(ScannerError::illegal_character(self,None)) },
             "\"" => self.scan_token_string("\"")?,
             "'" => self.scan_token_string("'")?,
 
@@ -173,7 +173,7 @@ impl<'a> Scanner<'a> {
                             Some(keyword) => keyword,
                             None => match self.scan_peek_token_number(char)? {
                                 Some(number) => number,
-                                None => return Err(ScannerError::illegal_character(self)),
+                                None => return Err(ScannerError::illegal_character(self,None)),
                             }
                         }
                     },
@@ -322,7 +322,7 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    fn scan_peek_multiline_string(&mut self) -> Option<usize> {
+    fn scan_peek_multiline_block(&mut self) -> Option<usize> {
         //! checks if the next few characters defines a multiline string 
         //! using the `[==[` format where the number of `=` is the level
         //! 
@@ -351,6 +351,13 @@ impl<'a> Scanner<'a> {
         
         let mut working_pos = self.current_pos;
         let mut level = 0;
+
+        // will check if the previous character is the first '[' or if the
+        // current character is the first '[', then moves so the cursor is 
+        // currently right after the first '['
+        if &self.raw_code[working_pos - 1 .. working_pos] != "[" {
+            working_pos += 1;
+        }
 
         loop {
 
@@ -410,11 +417,20 @@ impl<'a> Scanner<'a> {
     }
 
     fn scan_token_multiline_string(&mut self, level : usize) -> Result<Token,Error> {
+        //! returns a multiline string Token
+        
+        match self.scan_token_multiline(level) {
+            Err(error) => Err(error),
+            Ok(string) => Ok(Token::MultiLineString(string)),
+        }
+    }
+
+    fn scan_token_multiline(&mut self, level : usize) -> Result<String,Error> {
         //! will act as the rest of what we are getting is a comment
         //! this doesn't do any checking because it assumes you did a peek check
         //! that there is actually a comment
         //! 
-        //! Handles the `[==[` style comment where the number of `=` is the level
+        //! Handles the `[==[` style where the number of `=` is the level
         
         // creates the string of ending characters so we know what to look for.
         let ending_chars : String = {
@@ -446,7 +462,7 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        Ok(Token::MultiLineString(string))
+        Ok(string)
     }
 
     fn scan_token_comment(&mut self) -> Result<Token,Error> {
@@ -459,26 +475,16 @@ impl<'a> Scanner<'a> {
         let mut string = String::new();
         
         // first we need to know what kind of comment we are working with
-        if self.scan_peek("[[") {
-            // looks like its a long comments
+        if let Some(level) = self.scan_peek_multiline_block() {
+            // looks like its a long comments, we are going to cheat here and use
+            // the string stuff too, because it uses the same logic except it doesn't
+            // have the -- in front
             
-            loop {
-                // checks if we reached the end of the code without the comment close
-                if self.current_pos == self.raw_code.len() {
-                    return Err(ScannerError::unterminated_code_segment(self,2,2,"long comment has no end"));  
-                }
-
-                // gets the next character
-                let char = &self.raw_code[self.current_pos .. self.current_pos + 1];
-                self.current_pos += 1;
-
-                match char {
-                    "]" => if self.scan_peek("]") { break; /* we found the end of the comment */ } 
-                           else { string = format!("{}{}",string,"]"); /* we didn't find the end, so still record it */ },
-                    c => string = format!("{}{}",string,c),
-                }
-
+            match self.scan_token_multiline(level) {
+                Err(error) => return Err(error),
+                Ok(in_string) => string = in_string
             }
+
         } else {
             // we have the simple comment, which terminates at the end of the line
             

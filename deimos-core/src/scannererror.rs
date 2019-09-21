@@ -51,11 +51,14 @@ impl ScannerError {
         ScannerError::UCS { info }.into()
     }
 
-    pub fn illegal_character(scanner : &Scanner) -> Error {
+    pub fn illegal_character(scanner : &Scanner, description : Option<&str>) -> Error {
         //! creates an illegal or unknown character error,
         //! 
         
         let mut info = CodeInfo::from(scanner);
+        if let Some(desc) = description {
+            info.description = desc.to_string();
+        }
 
         ScannerError::IC { info }.into()
     }
