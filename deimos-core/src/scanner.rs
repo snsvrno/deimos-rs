@@ -6,7 +6,7 @@ use crate::parser::Parser;
 use crate::error::CodeInformation;
 use crate::codewrap::CodeWrap::CodeWrap;
 
-type TokenWrapped = crate::codewrap::CodeWrap<Token>;
+pub type TokenWrapped = crate::codewrap::CodeWrap<Token>;
 
 #[allow(dead_code)]
 pub struct Scanner<'a> {
@@ -87,15 +87,6 @@ impl<'a> Scanner<'a> {
         self.trim_whitespace();
 
         Ok(self)
-    }
-
-    pub fn into_parser(self) -> Parser<'a> {
-        Parser {
-            raw_code : self.raw_code,
-            file_name : self.file_name,
-
-            .. Parser::default()
-        }
     }
 
     // PRIVATE FUNCTIONS ///////////////////////
@@ -512,6 +503,19 @@ impl<'a> Scanner<'a> {
 mod tests {
     use crate::token::Token;
     use crate::scanner::Scanner;
+
+    #[test]
+    #[ignore]
+    pub fn quick_failure_to_see_tokens() {
+        let code = "print('testing')";
+
+        match Scanner::from_str(&code,None).scan() {
+            Err(error) => println!("{}",error),
+            Ok(scanner) => for t in scanner.tokens { println!("{:?}",t.item()); } ,
+        }
+
+        assert!(false)
+    }
 
     #[test]
     pub fn scan_lua_test_suite() {

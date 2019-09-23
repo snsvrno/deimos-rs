@@ -42,6 +42,18 @@ pub enum Token {
 
 impl CodeWrappable for Token { }
 
+
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::Number(number) => write!(f, "{}", number),
+            Token::Identifier(string) => write!(f, "{}", string),
+            Token::String(string) => write!(f, "'{}'", string),
+            _ => write!(f, "{:?}", self)
+        }
+    }
+}
+
 #[allow(dead_code)]
 impl Token {
 

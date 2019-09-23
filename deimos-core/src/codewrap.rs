@@ -5,6 +5,7 @@
 pub trait CodeWrappable { }
 
 pub enum CodeWrap<CW:CodeWrappable> {
+    // token, where it starts, where it ends
     CodeWrap(CW,usize, usize),
 }
 
