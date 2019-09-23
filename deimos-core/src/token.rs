@@ -144,7 +144,6 @@ impl Token {
         }
     }
 
-    #[cfg(test)]
     pub fn is_same_type(&self, other : &Token) -> bool {
         //! checks if the two tokens are the same type, there are only
         //! a few cases where we can't rely on ==, defined below.

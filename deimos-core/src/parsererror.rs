@@ -8,7 +8,7 @@ use crate::error::{ CodeInfo, error_display };
 #[derive(Debug,Fail)]
 pub enum ParserError {
     #[fail]
-    UCS { info : CodeInfo }, // UnterminatedCodeSegment
+    GEN { info : CodeInfo }, // UnterminatedCodeSegment
 }
 
 impl fmt::Display for ParserError {
@@ -18,7 +18,7 @@ impl fmt::Display for ParserError {
         
         // determines whats the right name to use for the error
         let (error_type, info) = match self {
-            ParserError::UCS { info } => ("Unterminated Code Segment", info),
+            ParserError::GEN { info } => ("General Parsing Error", info),
         };
 
         error_display(f, info, "parser", error_type)
@@ -27,19 +27,17 @@ impl fmt::Display for ParserError {
 
 #[allow(dead_code)]
 impl ParserError {
-    pub fn unterminated_code_segment(parser : &Parser, offset : usize, span : usize, description : &str) -> Error {
-        //! creates an unterminated code segment error,
+    pub fn general_error(parser : &Parser, start : usize, end : usize, description : &str) -> Error {
+        //! creates a general parsing error,
         //! 
-        //! - offset : how many characters to the left should we offset, assumes
-        //!            that we consumed some characters so we might need to back
-        //!            track
-        //! - span : the length of the part to highlight
-        
+        //! - start : where in the code does this error start
+        //! - end : where in the code does this error end
+
         let mut info = CodeInfo::from(parser);
-        info.pos -= offset;
-        info.span = span;
+        info.pos = start;
+        info.span = end - start + 1;
         info.description = description.to_string();
 
-        ParserError::UCS { info }.into()
+        ParserError::GEN { info }.into()
     }
 }

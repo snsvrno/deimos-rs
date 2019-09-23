@@ -5,5 +5,5 @@ mod parser;
 mod parsererror;
 mod error;
 mod codewrap;
-mod language;
-mod traits;
+mod syntax;
+mod syntaxerror;

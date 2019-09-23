@@ -48,6 +48,7 @@ impl CodeInfo {
 }
 
 const LEFT_PADDING : &'static str = "     ";
+const DESCRIPTION_WIDTH : usize = 40;
 
 pub fn error_display(f : &mut fmt::Formatter<'_>, info : &CodeInfo, error_type : &str, error_name : &str) -> fmt::Result {
 
@@ -104,7 +105,7 @@ pub fn error_display(f : &mut fmt::Formatter<'_>, info : &CodeInfo, error_type :
             loop {
 
                 // makes sure we don't access outside of the `raw_code`
-                if pos > info.raw_code.len() {
+                if pos > info.raw_code.len() - 1 {
                     break;
                 }
 
@@ -142,13 +143,41 @@ pub fn error_display(f : &mut fmt::Formatter<'_>, info : &CodeInfo, error_type :
                 string = format!("{}{}",string,"^");
             }
 
-            for _ in code_start .. info.pos - 1 {
+            for _ in code_start .. info.pos {
                 string = format!("{}{}"," ",string);
             }
 
             // adds some extra text if there is any
             if info.description.len() > 0 {
-                string = format!("{} {}", string, info.description);  
+                if info.description.len() <= DESCRIPTION_WIDTH {
+                    string = format!("{} {}", string, info.description);
+                } else {
+                    // my attempt at doing a multiline thing
+                    let header = {
+                        let mut spacer = String::from("       ");
+                        for i in (1 .. string.len()).rev() {
+                            if &string[i .. i+1] == "\n" { break; } else { spacer = format!(" {}",spacer); }
+                        }
+                        spacer = format!("{}{}",LEFT_PADDING,spacer);
+                        spacer
+                    };
+
+                    let mut count = 1;
+                    while info.description.len() >  count * DESCRIPTION_WIDTH {
+                        let section = &info.description[(count-1) * DESCRIPTION_WIDTH .. count * DESCRIPTION_WIDTH];
+                        if count == 1 {
+                            string = format!("{} {}\n", string, section);
+                        } else {
+                            string = format!("{}{} {}\n", string, header, section);
+                        }
+                        count += 1;
+                    }
+
+                    // need to add the last bit
+                    string = format!("{}{} {}", string, header, &info.description[(count-1) * DESCRIPTION_WIDTH ..]);
+
+
+                }
             }
         
             string

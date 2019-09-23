@@ -4,6 +4,7 @@
 
 pub trait CodeWrappable { }
 
+#[derive(Debug)]
 pub enum CodeWrap<CW:CodeWrappable> {
     // token, where it starts, where it ends
     CodeWrap(CW,usize, usize),
@@ -11,8 +12,24 @@ pub enum CodeWrap<CW:CodeWrappable> {
 
 impl<CW:CodeWrappable> CodeWrap<CW> {
     pub fn item(&self) -> &CW {
-        if let CodeWrap::CodeWrap(ref inside,_ , _) = self {
+        if let CodeWrap::CodeWrap(ref inside, _ , _) = self {
             inside
+        } else {
+            unimplemented!();
+        }
+    }
+
+    pub fn start(&self) -> usize {
+        if let CodeWrap::CodeWrap(_,start , _) = self {
+            *start
+        } else {
+            unimplemented!();
+        }
+    }
+
+    pub fn end(&self) -> usize {
+        if let CodeWrap::CodeWrap(_, _, end) = self {
+            *end
         } else {
             unimplemented!();
         }

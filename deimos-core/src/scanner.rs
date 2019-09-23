@@ -75,7 +75,6 @@ impl<'a> Scanner<'a> {
                     if token == Token::EOL {
                         self.line_number += 1;
                     }
-
                     self.tokens.push(CodeWrap(token, self.token_start, self.token_end))
                 },
             }
@@ -114,7 +113,7 @@ impl<'a> Scanner<'a> {
         }
 
         // some local stuff for metadata on each token
-        let token_start : usize = self.current_pos;
+        self.token_start = self.current_pos;
 
         // gets the slice of the next character
         let char = &self.raw_code[self.current_pos .. self.current_pos + 1];
@@ -170,6 +169,9 @@ impl<'a> Scanner<'a> {
                     },
         };
 
+        // makes the current cursor position so we know
+        // where this token ends
+        self.token_end = self.current_pos - 1;
         Ok(token)
     }
 
