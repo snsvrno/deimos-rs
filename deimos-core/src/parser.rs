@@ -12,12 +12,13 @@ type Block = CodeWrap<SyntaxElement>;
 pub struct Parser<'a> {
     pub file_name : String,
     pub raw_code : &'a str,
-    pub blocks : Vec<Block>,
+    pub blocks : Option<Block>,
 
     // working 
     pub tokens : Vec<TokenWrapped>,
     pub current_pos : usize,
     pub working_phrase : Vec<Block>,
+    pub working_statements : Vec<Block>,
 }
 
 impl<'a> std::default::Default for Parser<'a> {
@@ -25,11 +26,12 @@ impl<'a> std::default::Default for Parser<'a> {
         Parser {
             raw_code : "",
             file_name : String::from("buffer"),
-            blocks : Vec::new(),
+            blocks : None,
 
             tokens : Vec::new(),
             current_pos : 0,
             working_phrase : Vec::new(),
+            working_statements : Vec::new(),
         }
     }
 }
@@ -51,7 +53,13 @@ impl<'a> Parser<'a>{
     }
 
     pub fn parse(mut self) -> Result<Self,Error> {
+        //! works through the tokens and makes them into statements, chunks and blocks
+        //! 1. it will loop through and attempt to collect all the tokens into statements
+        //! 2. next it will try to group the statements as chunks
+        //! 3. if we only get one chunk at the end it will then wrap it as a block
+        //!    and call it a day.
 
+        // making statements from all the tokens
         loop {
             match self.set_next_phrase() {
                 false => break,
@@ -76,16 +84,8 @@ impl<'a> Parser<'a>{
                 1 => {
                     // we are expecting one element, so maybe we are ok
                     let syntax_element = self.working_phrase.remove(0);
-                    if let CodeWrap::CodeWrap(SyntaxElement::Block(_),_,_) = syntax_element {
-                        self.blocks.push(syntax_element);
-                    } else {
-                        // we don't have a block, then there is an error
-                        return Err(ParserError::general_error(&self,
-                            self.working_phrase[0].start(),
-                            self.working_phrase[0].end(),
-                            "all statements need to be reduced down to blocks"
-                        ));
-                    }
+                    self.working_statements.push(syntax_element);
+
                 },
                 0 => {
                     // we have zero, not sure what happened but this shouldn't be possible.
@@ -101,11 +101,15 @@ impl<'a> Parser<'a>{
                     return Err(ParserError::general_error(&self,
                         self.working_phrase[0].start(),
                         self.working_phrase[self.working_phrase.len()-1].end(),
-                        &format!("could not reduce down to a single block (found {}), possible syntax error",self.working_phrase.len())
+                        &format!("could not reduce down to a single element (found {}), possible syntax error",self.working_phrase.len())
                     ));
                 }
             }
         }
+
+        // now we have a list of statements, it should be able to collapse into 1
+        // chunk.
+        self.collapse_statements_to_chunk()?;
 
         Ok(self)
     }
@@ -115,6 +119,29 @@ impl<'a> Parser<'a>{
     //////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////////////////////
+
+    fn collapse_statements_to_chunk(&mut self) -> Result<(),Error> {
+        //! works through the put together statements and tries to make 
+        //! a single chunk.
+        //!
+        //! chunk ::= {stat [`;´]} [laststat [`;´]]
+
+        SyntaxElement::process_statements_to_chunk(&mut self.working_statements)?;
+
+        if self.working_statements.len() != 1 {
+            return Err(ParserError::general_error(&self,
+                self.working_statements[0].start(),
+                self.working_statements[self.working_statements.len()-1].end(),
+                &format!("could not take all statements and make 1 chunk (found {}), possible syntax error",self.working_phrase.len())
+            ));
+        }
+
+        let CodeWrap::CodeWrap(chunks, start, end) = self.working_statements.remove(0);
+
+        self.blocks = Some(CodeWrap::CodeWrap(SyntaxElement::Block(Box::new(chunks)), start, end));
+
+        Ok(())
+    }
 
     fn set_next_phrase(&mut self) -> bool {
         //! pops the tokens from the scanner (stored in self.tokens) until it 
@@ -158,7 +185,7 @@ impl<'a> Parser<'a>{
         //! the sent Vec<> and return a bool to whether it performed any
         //! changes or not
                 
-        let mut counter = 0;
+        let mut counter;
 
         // check for chunk
         // check for block
@@ -168,10 +195,15 @@ impl<'a> Parser<'a>{
         // check for laststatement
         // check for funcname
         // check for varlist
+        counter = 0; loop { if SyntaxElement::process_var_list(&mut self.working_phrase)? { counter += 1; }
+                            else { if counter > 0 { return Ok(true); } break; }}
         // check for var
+        counter = 0; loop { if SyntaxElement::process_var(&mut self.working_phrase)? { counter += 1; }
+                            else { if counter > 0 { return Ok(true); } break; }}
         // check for namelist
         // check for explist
-        if SyntaxElement::process_exp_list(&mut self.working_phrase)? { return Ok(true); }
+        counter = 0; loop { if SyntaxElement::process_exp_list(&mut self.working_phrase)? { counter += 1; }
+                            else { if counter > 0 { return Ok(true); } break; }}
         // check for expression
         counter = 0; loop { if SyntaxElement::process_exp(&mut self.working_phrase)? { counter += 1; }
                             else { if counter > 0 { return Ok(true); } break; }}
@@ -200,14 +232,20 @@ mod tests {
     #[test]
     //#[ignore]
     pub fn quick_failure_to_see_parse() {
-        let code = "bob = 3+-4";
+        let code = "bob = 4 + -2";
 
         match Scanner::from_str(&code,None).scan() {
             Err(error) => println!("{}",error),
             Ok(scanner) => { 
                 match Parser::from_scanner(scanner).parse() {
                     Err(error) => println!("{}",error),
-                    Ok(parser) => println!("<done parsing>"),
+                    Ok(parser) => { 
+                        println!("=====<DONE>=====");
+                        if let Some(ref block) = parser.blocks {
+                            println!("{}",block.item())  
+                        }
+                        
+                    },
                 }
             },
         }
