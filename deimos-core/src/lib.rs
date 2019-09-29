@@ -6,4 +6,3 @@ mod parsererror;
 mod error;
 mod codewrap;
 mod syntax;
-mod syntaxerror;
