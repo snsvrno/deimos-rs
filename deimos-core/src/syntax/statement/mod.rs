@@ -1,4 +1,5 @@
 mod assignment;
+mod doend;
 
 use crate::syntax::{SyntaxResult, SyntaxElement};
 use crate::codewrap::CodeWrap;
@@ -29,6 +30,11 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
         if assignment::process(phrase) { continue; }
         // functioncall | 
         // do block end | 
+        match doend::process(phrase) {
+            SyntaxResult::Done => continue,
+            SyntaxResult::Wrap(wrapped) => return SyntaxResult::Wrap(wrapped),
+            _ => { },
+        }
         // while exp do block end | 
         // repeat block until exp | 
         // if exp then block {elseif exp then block} [else block] end | 

@@ -4,6 +4,7 @@ use crate::codewrap::{CodeWrap, CodeWrappable};
 use crate::scanner::{Scanner,TokenWrapped};
 use crate::syntax::{
     exp, explist, statement, var, varlist,
+    final_compress,
     SyntaxElement, SyntaxResult
 };
 use crate::parsererror::ParserError;
@@ -19,6 +20,8 @@ pub struct Parser<'a> {
 
     // working private members,
     tokens : Vec<TokenWrapped>,
+    working_block : Vec<Block>,
+    block_stack : Vec<(Block, Vec<Block>)>,
 }
 
 
@@ -30,6 +33,8 @@ impl<'a> std::default::Default for Parser<'a> {
             blocks : None,
 
             tokens : Vec::new(),
+            working_block : Vec::new(),
+            block_stack : Vec::new(),
 
         }
     }
@@ -68,17 +73,46 @@ impl<'a> Parser<'a>{
                     loop {
                         // check for chunk
                         // check for block
+                        // don't do these here, just leaving this so i remember about them
+
                         // check for statement
-                        if Parser::smart_matcher(statement::process(&mut phrase))? { continue; };
+                        match statement::process(&mut phrase) { 
+                            SyntaxResult::Done => continue,
+                            SyntaxResult::Wrap(wrap_type) => {
+                                // we go inside a block, need to track that here
+                                self.block_stack.push((wrap_type, Vec::new()));
+                                
+                                // and need to remove the current phrase, it should
+                                // always be garbage (or already stored in the stack)
+                                // because of the way the scanner breaks tokens and 
+                                // statements, TODO : need to make tests to prove this
+                                phrase = Vec::new();
+                                break;
+                            }
+                            _ => { },
+                        }
                         // check for laststatement
                         // check for funcname
+                        
                         // check for varlist
-                        if Parser::smart_matcher(varlist::process(&mut phrase))? { continue; };
+                        match varlist::process(&mut phrase) { 
+                            SyntaxResult::Done => continue,
+                            _ => { },
+                        }
+                        
                         // check for var
-                        if Parser::smart_matcher(var::process(&mut phrase))? { continue; };
+                        match var::process(&mut phrase) { 
+                            SyntaxResult::Done => continue,
+                            _ => { },
+                        }
                         // check for namelist
+                        
                         // check for explist
-                        if Parser::smart_matcher(explist::process(&mut phrase))? { continue; };
+                        match explist::process(&mut phrase) { 
+                            SyntaxResult::Done => continue,
+                            _ => { },
+                        }
+
                         // check for expression
                         if exp::process(&mut phrase) { continue; }
                         // check for prefixexp
@@ -94,12 +128,81 @@ impl<'a> Parser<'a>{
                         break;
                     }
 
-                    println!("==");
-                    for p in phrase {
-                        println!("{}",p.item());
+                    // checks for any statement closes in the stack
+                    if phrase.len() > 0 && self.block_stack.len() > 0 {
+                        // we check the last element of the phrase if its a token,
+                        // if it is we check against all the statement types that can contain
+                        // other statements inside of it and checks if we have the closer for the 
+                        // current block_stack item
+                        let pos = phrase.len() - 1;
+                        if let CodeWrap::CodeWrap(SyntaxElement::Token(ref token),_, end) = phrase[pos] {
+                            // gets the stack_item
+                            let stack_pos = self.block_stack.len() - 1;
+                            let (CodeWrap::CodeWrap(ref stack_item, start, _), ref mut stack) = self.block_stack[stack_pos];
+
+                            if &stack_item.ending_token() == token {
+                                // now we are going to construct the insides, and the end,
+                                // taking the start and anything addition from inside the `stack_item`
+
+                                // makes a block out of all the inside pieces
+                                let inner_block = match final_compress(stack) {
+                                    SyntaxResult::Error(start, end, description) => return Err(ParserError::general_error(&self, start, end, &description)),
+                                    SyntaxResult::Wrap(CodeWrap::CodeWrap(inner_block, _, _)) => inner_block,
+                                    _ => unimplemented!(),
+                                };
+
+                                // checks if the insides are a block, because they need to be a block
+                                if !inner_block.is_block() {
+                                    return Err(ParserError::general_error(&self, start, end, "must be able to reduce down to a block"));
+                                }
+
+                                // builds the DoEnd element
+                                let new_item = match stack_item {
+                                    SyntaxElement::StatementDoEnd(_) => SyntaxElement::StatementDoEnd(Box::new(inner_block)),
+                                    _ => { unimplemented!(); }
+                                };
+                                // creates the piece we will inject upwards.
+                                let code_item = CodeWrap::CodeWrap(new_item, start, end);
+
+                                // checks were we are going to put this, either we go one way up
+                                // the stack, or we add it to the main working_block
+                                match pos {
+                                    // adds it to the main block
+                                    0 => self.working_block.push(code_item),
+                                    _ => {
+                                        // adds it one up the stack
+                                        let (_, ref mut stack_parent) = self.block_stack[pos-1];
+                                        stack_parent.push(code_item);
+                                    },
+                                }
+                            }
+
+                        }
+                    }
+
+
+                    // adds the phrases to wherever they need to go
+                    if phrase.len() > 0 {
+                        // only does this if we have items in the phrase
+
+                        if self.block_stack.len() > 0 {
+                            // we have a stack, so add the items to the 
+                            // points in the stack
+                            let item_no = self.block_stack.len() - 1;
+                            let (_, ref mut working_phrase) = self.block_stack[item_no];
+                            working_phrase.append(&mut phrase);
+                        } else {
+                            // merges the items into the working_block
+                            self.working_block.append(&mut phrase);
+                        }    
                     }
                 }
             }
+        }
+
+        println!("===");
+        for p in &self.working_block {
+            println!("{}",p.item());
         }
 
         Ok(self)
@@ -135,21 +238,6 @@ impl<'a> Parser<'a>{
             0 => None,
             _ => Some(tokens),
         }
-    }
-
-    fn smart_matcher(result : SyntaxResult) -> Result<bool,Error> {
-        //! used to wrap process statements that return a SyntaxResult
-        //! its intent is to clean up the code a little and reuse this
-        //! code here
-        
-        match result {
-            SyntaxResult::Error(start,end,description) => println!("WE HAD ERROR: {} {} {}",start,end,description),
-            SyntaxResult::Done => return Ok(true),
-            SyntaxResult::None => { },
-            SyntaxResult::More => { },
-        }
-        
-        Ok(false)
     }
 }
 
