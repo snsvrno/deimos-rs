@@ -14,6 +14,9 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
     loop {
         // check and make sure we don't access outside the array.
         if i >= elements.len() { break; }
+        // also check if we are at an equals sign, because we can only do var_lists on the left side
+        // of an equals sign.
+        if let CodeWrap::CodeWrap(SyntaxElement::Token(Token::Equal), _, _) = elements[i] { break; }
 
         if start.is_none() {
             // if we haven't found the first expression, then lets 

@@ -1,9 +1,9 @@
 use crate::error::CodeInformation;
 use crate::token::Token;
-use crate::codewrap::{CodeWrap, CodeWrappable};
+use crate::codewrap::CodeWrap;
 use crate::scanner::{Scanner,TokenWrapped};
 use crate::syntax::{
-    exp, explist, statement, var, varlist,
+    exp, explist, prefixexp, statement, var, varlist,
     final_compress,
     SyntaxElement, SyntaxResult
 };
@@ -116,6 +116,7 @@ impl<'a> Parser<'a>{
                         // check for expression
                         if exp::process(&mut phrase) { continue; }
                         // check for prefixexp
+                        if prefixexp::process(&mut phrase) { continue; }
                         // check for functioncall
                         // check for args
                         // check for function
@@ -146,7 +147,17 @@ impl<'a> Parser<'a>{
 
                                 // makes a block out of all the inside pieces
                                 let inner_block = match final_compress(stack) {
-                                    SyntaxResult::Error(start, end, description) => return Err(ParserError::general_error(&self, start, end, &description)),
+                                    SyntaxResult::Error(error_start, error_end, description) =>  {
+                                        // added this section because i don't know the code when processessing 
+                                        // so i might return 0,0 for the code reference, and that isn't valid
+                                        let (e_start, e_end) = match (error_start, error_end) {
+                                            (0, 0) => (start, end),
+                                            (_, 0) => (error_start, error_start),
+                                            (_, _) => (error_start, error_end),
+                                        };
+
+                                        return Err(ParserError::general_error(&self, e_start, e_end, &description));
+                                    },
                                     SyntaxResult::Wrap(CodeWrap::CodeWrap(inner_block, _, _)) => inner_block,
                                     _ => unimplemented!(),
                                 };
@@ -251,7 +262,14 @@ mod tests {
     #[test]
     //#[ignore]
     pub fn quick_failure_to_see_parse() {
-        let code = "do\nbob = 4 + -2\nend";
+        let code = r#"do
+            bob = 4 + -2
+            jim = 4 + 3
+            jim = 4 + 3
+            jim = 4 + 3
+            jim = 4 + 3
+            jim = bob + jim
+        end"#;
 
         match Scanner::from_str(&code,None).scan() {
             Err(error) => println!("{}",error),

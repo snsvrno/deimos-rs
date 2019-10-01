@@ -1,7 +1,7 @@
 pub type T = CodeWrap<SyntaxElement>;
 
 use crate::token::Token;
-use crate::codewrap::{CodeWrap, CodeWrappable};
+use crate::codewrap::CodeWrap;
 use crate::syntax::SyntaxElement;
 
 pub fn process(elements : &mut Vec<T>) -> bool {

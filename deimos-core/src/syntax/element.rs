@@ -21,6 +21,8 @@ pub enum SyntaxElement {
     Binop(Box<SyntaxElement>, Box<SyntaxElement>, Box<SyntaxElement>), // exp1, op, exp2
     Unop(Box<SyntaxElement>, Box<SyntaxElement>),   // op, exp
 
+    PrefixExp(Box<SyntaxElement>),
+
     Chunk(Vec<Box<SyntaxElement>>),
     Block(Box<SyntaxElement>),
 }
@@ -35,6 +37,7 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::Binop(left, op, right) => write!(f, "({} {} {})", op, left, right),
             SyntaxElement::Unop(op, exp) => write!(f, "({} {})", op, exp),
             SyntaxElement::Exp(item) => write!(f, "{}", item),
+            SyntaxElement::PrefixExp(item) => write!(f, "{}", item),
             SyntaxElement::ExpList(list) => write!(f, "<Exp {}>", SyntaxElement::list_to_string(list,", ","")),
             SyntaxElement::Var(item) => write!(f, "{}", item),
             SyntaxElement::VarList(list) => write!(f, "<Var {}>", SyntaxElement::list_to_string(list,", ","")),
@@ -77,6 +80,20 @@ impl SyntaxElement {
     pub fn is_exp_list(&self) -> bool {
         match self {
             SyntaxElement::ExpList(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_prefix_exp(&self) -> bool {
+        match self {
+            SyntaxElement::PrefixExp(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_var(&self) -> bool {
+        match self {
+            SyntaxElement::Var(_) => true,
             _ => false,
         }
     }

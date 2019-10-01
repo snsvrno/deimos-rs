@@ -2,6 +2,7 @@ mod element; pub use element::SyntaxElement;
 
 pub mod exp;
 pub mod explist;
+pub mod prefixexp;
 pub mod statement;
 pub mod var;
 pub mod varlist;
@@ -22,7 +23,6 @@ pub fn final_compress(elements : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxRes
 	//!
 	//! chunk ::= {stat [`;´]} [laststat [`;´]]
 	//! block ::= chunk
-
 
 	if elements.len() == 0 {
 		return SyntaxResult::Error(0,0,"No elements found to compress?".to_string());

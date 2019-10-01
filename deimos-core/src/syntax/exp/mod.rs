@@ -1,6 +1,7 @@
 mod token;
 mod unop;
 mod binop;
+mod prefixexp;
 
 use crate::syntax::SyntaxElement;
 use crate::codewrap::CodeWrap;
@@ -17,7 +18,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> bool {
     //! [ ] String | 
     //! [x] `...´ | 
     //! [ ] function | 
-    //! [ ] prefixexp | 
+    //! [x] prefixexp | 
     //! [ ] tableconstructor | 
     //! [x] exp binop exp | 
     //! [x] unop exp 
@@ -44,6 +45,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> bool {
         if token::process(phrase, Token::TriplePeriod) { continue; }
         // checks for function
         // checks for prefixexp
+        if prefixexp::process(phrase) { continue; }
         // checks for tableconstructor   
         // checks for binop
         if binop::process(phrase) { continue; }
