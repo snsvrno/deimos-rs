@@ -13,6 +13,8 @@ pub enum SyntaxElement {
     VarList(Vec<Box<SyntaxElement>>),
 
     Var(Box<SyntaxElement>),
+    VarDot(Box<SyntaxElement>, Box<SyntaxElement>),     // left.right
+    VarIndex(Box<SyntaxElement>, Box<SyntaxElement>),    // left[right]
 
     ExpList(Vec<Box<SyntaxElement>>),
 
@@ -40,6 +42,8 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::PrefixExp(item) => write!(f, "{}", item),
             SyntaxElement::ExpList(list) => write!(f, "<Exp {}>", SyntaxElement::list_to_string(list,", ","")),
             SyntaxElement::Var(item) => write!(f, "{}", item),
+            SyntaxElement::VarDot(left, right) => write!(f, "{}.{}", left, right),
+            SyntaxElement::VarIndex(left, right) => write!(f, "{}[{}]", left, right),
             SyntaxElement::VarList(list) => write!(f, "<Var {}>", SyntaxElement::list_to_string(list,", ","")),
             SyntaxElement::StatementAssign(left,right) => write!(f, "(= {} {})", left, right),
             SyntaxElement::StatementDoEnd(block) => write!(f, "(do\n{}end)", block),
@@ -93,7 +97,8 @@ impl SyntaxElement {
 
     pub fn is_var(&self) -> bool {
         match self {
-            SyntaxElement::Var(_) => true,
+            SyntaxElement::Var(_) | 
+            SyntaxElement::VarDot(_,_) => true,
             _ => false,
         }
     }

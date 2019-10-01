@@ -255,7 +255,7 @@ mod tests {
     use crate::scanner::Scanner;
 
     #[test]
-    //#[ignore]
+    #[ignore]
     pub fn quick_failure_to_see_parse() {
         let code = r#"do
             bob = 4 + -2
