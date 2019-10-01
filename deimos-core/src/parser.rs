@@ -75,6 +75,7 @@ impl<'a> Parser<'a>{
                         // check for block
                         // don't do these here, just leaving this so i remember about them
 
+
                         // check for statement
                         match statement::process(&mut phrase) { 
                             SyntaxResult::Done => continue,
@@ -139,11 +140,12 @@ impl<'a> Parser<'a>{
                         if let CodeWrap::CodeWrap(SyntaxElement::Token(ref token),_, end) = phrase[pos] {
                             // gets the stack_item
                             let stack_pos = self.block_stack.len() - 1;
-                            let (CodeWrap::CodeWrap(ref stack_item, start, _), ref mut stack) = self.block_stack[stack_pos];
 
-                            if &stack_item.ending_token() == token {
+                            if &self.block_stack[stack_pos].0.item().ending_token() == token {
                                 // now we are going to construct the insides, and the end,
                                 // taking the start and anything addition from inside the `stack_item`
+
+                                let (CodeWrap::CodeWrap(ref stack_item, start, _), ref mut stack) = self.block_stack.remove(stack_pos);
 
                                 // makes a block out of all the inside pieces
                                 let inner_block = match final_compress(stack) {
@@ -175,17 +177,10 @@ impl<'a> Parser<'a>{
                                 // creates the piece we will inject upwards.
                                 let code_item = CodeWrap::CodeWrap(new_item, start, end);
 
-                                // checks were we are going to put this, either we go one way up
-                                // the stack, or we add it to the main working_block
-                                match pos {
-                                    // adds it to the main block
-                                    0 => self.working_block.push(code_item),
-                                    _ => {
-                                        // adds it one up the stack
-                                        let (_, ref mut stack_parent) = self.block_stack[pos-1];
-                                        stack_parent.push(code_item);
-                                    },
-                                }
+                                // we remove the ending token and replace it with the new
+                                // statement block
+                                phrase.remove(pos);
+                                phrase.insert(pos, code_item);
                             }
 
                         }
@@ -265,8 +260,10 @@ mod tests {
         let code = r#"do
             bob = 4 + -2
             jim = 4 + 3
-            jim = 4 + 3
-            jim = 4 + 3
+            do 
+                jim = 4 + 3
+                jim = 4 + 3
+            end
             jim = 4 + 3
             jim = bob + jim
         end"#;
