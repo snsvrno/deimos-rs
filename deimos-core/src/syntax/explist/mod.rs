@@ -86,3 +86,34 @@ pub fn process(elements : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
 
     SyntaxResult::None
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::syntax::explist::process;
+    use crate::syntax::SyntaxElement;
+    use crate::codewrap::CodeWrap;
+
+    // contains all the test macros, to make the construction of tests look
+    // simpler, and easier to understand the nesting.
+    use crate::{
+        identifier, token, prefixexp, exp, var, number,
+        test_process, binop, unop, remove_codewrap,
+    };
+
+    #[test]
+    pub fn explist() {
+        let mut input_tokens : Vec<crate::codewrap::CodeWrap<SyntaxElement>> = vec![
+            exp!(number!(1.5)), token!(","),
+            exp!(binop!(12.0,"+",34.0)), token!(","), 
+            exp!(unop!("-",5.0)),
+        ];
+
+        // it should catch all of them the first time
+        test_process!(process(&mut input_tokens), true);
+
+        // there shouldn't be any other matches
+        test_process!(process(&mut input_tokens), false);
+    }
+
+}

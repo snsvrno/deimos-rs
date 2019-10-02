@@ -87,3 +87,49 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
 
     SyntaxResult::None
 }
+
+#[cfg(test)]
+mod tests {
+
+    use crate::syntax::varlist::process;
+    use crate::syntax::SyntaxElement;
+    use crate::codewrap::CodeWrap;
+
+    // contains all the test macros, to make the construction of tests look
+    // simpler, and easier to understand the nesting.
+    use crate::{
+        identifier, token, prefixexp, exp, var, number,
+        test_process,
+    };
+
+    #[test]
+    pub fn varlist() {
+        let mut input_tokens : Vec<crate::codewrap::CodeWrap<SyntaxElement>> = vec![
+            var!(identifier!("bob")), token!(","),
+            var!(identifier!("bob")), token!(","), 
+            var!(identifier!("bob")),
+        ];
+
+        // it should catch all of them the first time
+        test_process!(process(&mut input_tokens), true);
+
+        // there shouldn't be any other matches
+        test_process!(process(&mut input_tokens), false);
+    }
+
+    #[test]
+    pub fn varlist_failed() {
+        let mut input_tokens : Vec<crate::codewrap::CodeWrap<SyntaxElement>> = vec![
+            var!(identifier!("bob")),
+            var!(identifier!("bob")),
+            var!(identifier!("bob")),
+        ];
+
+        // it should fail, so it still have 3 tokens, 
+        // but the process DOES work, because it changes
+        // var to varlist but they are varlist of len() = 1
+        test_process!(process(&mut input_tokens), true);
+        assert_eq!(input_tokens.len(),3);
+    }
+
+}
