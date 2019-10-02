@@ -38,88 +38,65 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
 #[cfg(test)]
 mod tests {
 
-    use crate::syntax::{ SyntaxResult, SyntaxElement };
-    use crate::codewrap::CodeWrap::CodeWrap;
-    use crate::token::Token;
-
     use crate::syntax::var::process;
+    use crate::syntax::SyntaxElement;
+    use crate::codewrap::CodeWrap;
+
+    // contains all the test macros, to make the construction of tests look
+    // simpler, and easier to understand the nesting.
+    use crate::{
+        identifier, token, prefixexp, exp, var, number,
+        test_process,
+    };
 
     #[test]
     pub fn name() {
         let mut input_tokens : Vec<crate::codewrap::CodeWrap<SyntaxElement>> = vec![
-            CodeWrap(SyntaxElement::Token(Token::Identifier(String::from("bob"))), 0, 0),
-            CodeWrap(SyntaxElement::Token(Token::Identifier(String::from("bob"))), 0, 0),
-            CodeWrap(SyntaxElement::Token(Token::Identifier(String::from("bob"))), 0, 0),
+            identifier!("bob"), identifier!("bob"), identifier!("bob"),
         ];
 
         // it should catch all of them the first time
-        let result = match process(&mut input_tokens) {
-            SyntaxResult::Done => true,
-            _ => false,
-        };
-        assert!(result);
+        test_process!(process(&mut input_tokens), true);
 
         // there shouldn't be any other matches
-        let result = match process(&mut input_tokens) {
-            SyntaxResult::Done => true,
-            _ => false,
-        };
-        assert!(!result);
+        test_process!(process(&mut input_tokens), false);
     }
 
     #[test]
     pub fn prefixexp_exp() {
         let mut input_tokens : Vec<crate::codewrap::CodeWrap<SyntaxElement>> = vec![
-            CodeWrap(SyntaxElement::PrefixExp(Box::new(SyntaxElement::Var(Box::new(SyntaxElement::Token(Token::Identifier(String::from("bob"))))))), 0, 0),
-            CodeWrap(SyntaxElement::Token(Token::LeftBracket), 0, 0),
-            CodeWrap(SyntaxElement::Exp(Box::new(SyntaxElement::Token(Token::Number(1.0)))), 0, 0),
-            CodeWrap(SyntaxElement::Token(Token::RightBracket), 0, 0),
+            prefixexp!(var!(identifier!("bob"))),
+            token!("["),
+            exp!(number!(1.0)),
+            token!("]"),
         ];
 
         // it should catch all of them the first time
-        let result = match process(&mut input_tokens) {
-            SyntaxResult::Done => true,
-            _ => false,
-        };
-        assert!(result);
+        test_process!(process(&mut input_tokens), true);
 
         // it should reduce it down to 1 element
         assert_eq!(input_tokens.len(),1);
 
-
         // there shouldn't be any other matches
-        let result = match process(&mut input_tokens) {
-            SyntaxResult::Done => true,
-            _ => false,
-        };
-        assert!(!result);
+        test_process!(process(&mut input_tokens), false);
     }
 
     #[test]
     pub fn prefixexp_dot_name() {
         let mut input_tokens : Vec<crate::codewrap::CodeWrap<SyntaxElement>> = vec![
-            CodeWrap(SyntaxElement::PrefixExp(Box::new(SyntaxElement::Var(Box::new(SyntaxElement::Token(Token::Identifier(String::from("bob"))))))), 0, 0),
-            CodeWrap(SyntaxElement::Token(Token::Period), 0, 0),
-            CodeWrap(SyntaxElement::Token(Token::Identifier(String::from("bob"))), 0, 0),
+            prefixexp!(var!(identifier!("bob"))),
+            token!("."),
+            identifier!("bob"),
         ];
 
         // it should catch all of them the first time
-        let result = match process(&mut input_tokens) {
-            SyntaxResult::Done => true,
-            _ => false,
-        };
-        assert!(result);
+        test_process!(process(&mut input_tokens), true);
 
         // it should reduce it down to 1 element
         assert_eq!(input_tokens.len(),1);
 
-        
         // there shouldn't be any other matches
-        let result = match process(&mut input_tokens) {
-            SyntaxResult::Done => true,
-            _ => false,
-        };
-        assert!(!result);
+        test_process!(process(&mut input_tokens), false);
     }
 
 }
