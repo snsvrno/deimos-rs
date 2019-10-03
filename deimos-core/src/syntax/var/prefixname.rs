@@ -29,7 +29,7 @@ pub fn process(elements : &mut Vec<T>) -> bool {
 }
 
 fn can_reduce_to_var(prefixexp : &T, dot : &T, name : &T) -> bool {
-    println!("{:?},{:?},{:?}",prefixexp.item(), dot.item(), name.item());
+    
     match (prefixexp.item(), dot.item(), name.item()) {
         (
             SyntaxElement::PrefixExp(_), 

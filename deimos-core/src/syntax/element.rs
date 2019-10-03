@@ -25,8 +25,15 @@ pub enum SyntaxElement {
 
     PrefixExp(Box<SyntaxElement>),
 
+    TableConstructor(Box<SyntaxElement>),
+    Field(Box<SyntaxElement>),
+    FieldAssignment(Box<SyntaxElement>,Box<SyntaxElement>),
+    FieldList(Vec<Box<SyntaxElement>>),
+
     Chunk(Vec<Box<SyntaxElement>>),
     Block(Box<SyntaxElement>),
+
+    Empty // used for creating dummy objects, so i don't need to actually put anything real in there.
 }
 
 impl CodeWrappable for SyntaxElement { }
@@ -49,6 +56,10 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::StatementDoEnd(block) => write!(f, "(do\n{}end)", block),
             SyntaxElement::Block(chunk) => write!(f, "{}", chunk),
             SyntaxElement::Chunk(statements) => write!(f, "{}", SyntaxElement::list_to_string(statements,"\n","  ")),
+            SyntaxElement::FieldList(list) => write!(f, "<Fields {}>", SyntaxElement::list_to_string(list,", ","")),
+            SyntaxElement::FieldAssignment(left,right) => write!(f, "(= {} {})", left, right),
+            SyntaxElement::Field(token) => write!(f, "{}", token),
+            SyntaxElement::TableConstructor(list) => write!(f, "(Table {})", list),
 
             _ => write!(f, "SyntaxElement not defined!!")
         }
@@ -63,7 +74,15 @@ impl SyntaxElement {
 
         match self {
             SyntaxElement::StatementDoEnd(_) => Token::End,
+            SyntaxElement::TableConstructor(_) => Token::RightMoustache,
             _ => { assert!(false); Token::Nil },
+        }
+    }
+
+    pub fn does_match_token(&self, token : Token) -> bool {
+        match self {
+            SyntaxElement::Token(this_token) => this_token == &token,
+            __ => false,
         }
     }
 
@@ -88,9 +107,24 @@ impl SyntaxElement {
         }
     }
 
+    pub fn is_field(&self) -> bool {
+        match self {
+            SyntaxElement::Field(_) | 
+            SyntaxElement::FieldAssignment(_,_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_prefix_exp(&self) -> bool {
         match self {
             SyntaxElement::PrefixExp(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_name(&self) -> bool {
+        match self {
+            SyntaxElement::Token(Token::Identifier(_)) => true,
             _ => false,
         }
     }
@@ -100,6 +134,15 @@ impl SyntaxElement {
             SyntaxElement::Var(_) | 
             SyntaxElement::VarDot(_,_) => true,
             _ => false,
+        }
+    }
+
+    pub fn insides_single_only<'a>(&'a self) -> Option<&'a SyntaxElement> {
+        match self {
+            SyntaxElement::Exp(ref insides) => Some(&*insides),
+            SyntaxElement::PrefixExp(ref insides) => Some(&*insides),
+            SyntaxElement::Var(ref insides) => Some(&*insides),
+            _ => None,
         }
     }
 
@@ -114,6 +157,13 @@ impl SyntaxElement {
         match self {
             SyntaxElement::StatementAssign(_,_) |
             SyntaxElement::StatementDoEnd(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_table(&self) -> bool {
+        match self {
+            SyntaxElement::TableConstructor(_) => true,
             _ => false,
         }
     }

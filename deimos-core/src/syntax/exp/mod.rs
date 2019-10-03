@@ -2,6 +2,7 @@ mod token;
 mod unop;
 mod binop;
 mod prefixexp;
+mod tableconstructor;
 
 use crate::syntax::SyntaxElement;
 use crate::codewrap::CodeWrap;
@@ -19,7 +20,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> bool {
     //! [x] `...´ | 
     //! [ ] function | 
     //! [x] prefixexp | 
-    //! [ ] tableconstructor | 
+    //! [x] tableconstructor | 
     //! [x] exp binop exp | 
     //! [x] unop exp 
     
@@ -46,7 +47,8 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> bool {
         // checks for function
         // checks for prefixexp
         if prefixexp::process(phrase) { continue; }
-        // checks for tableconstructor   
+        // checks for tableconstructor
+        if tableconstructor::process(phrase) { continue; }
         // checks for binop
         if binop::process(phrase) { continue; }
         // checks for unop

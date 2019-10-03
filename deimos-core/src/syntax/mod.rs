@@ -6,6 +6,9 @@ pub mod prefixexp;
 pub mod statement;
 pub mod var;
 pub mod varlist;
+pub mod tableconstructor;
+pub mod field;
+pub mod fieldlist;
 
 use crate::codewrap::CodeWrap;
 
@@ -13,7 +16,7 @@ pub enum SyntaxResult {
     Done,
     Wrap(CodeWrap<SyntaxElement>),
     None,
-    More,
+    TableConst(usize),          // just for tables, it will return the pos of the '{'
     Error(usize,usize,String) // code_start, code_end, description
 }
 
