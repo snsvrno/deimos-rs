@@ -28,7 +28,7 @@ pub fn process(elements : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
             // so we can use %2 to tell if we should see a ',' or an 'exp'
             let factor = if let Some(start) = start { i - start } 
                          else { return SyntaxResult::Error(elements[i].start(), elements[i].end(),
-                            "field list, start isn't defined".to_string()); };
+                            "start isn't defined(fieldlist)".to_string()); };
 
             match factor % 2 {
                 // these are all the odd ones, starting with the one right after the exp
@@ -38,12 +38,11 @@ pub fn process(elements : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
                 // these are the even ones, should all be expressions
                 0 => if elements[i].item().is_field() { } 
                      else { 
-                        return SyntaxResult::Error(elements[i].start(), elements[i].end(),
-                            "expecting a field after the comma/semicolon".to_string()); 
+                        return SyntaxResult::None; 
                      },
 
                 _=> return SyntaxResult::Error(elements[i].start(), elements[i].end(),
-                    "fieldlist, mod is not 1 or 0...".to_string()),
+                    "mod is not 1 or 0...(fieldlist)".to_string()),
             }
         }
 

@@ -57,7 +57,8 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::VarIndex(left, right) => write!(f, "{}[{}]", left, right),
             SyntaxElement::VarList(list) => write!(f, "<Var {}>", SyntaxElement::list_to_string(list,", ","")),
             SyntaxElement::StatementAssign(left,right) => write!(f, "(= {} {})", left, right),
-            SyntaxElement::StatementDoEnd(block) => write!(f, "(do\n{}end)", block),
+            SyntaxElement::StatementDoEnd(block) => write!(f, "(do {} end)", block),
+            SyntaxElement::StatementWhile(cond,block) => write!(f, "(while {} do {} end)", cond, block),
             SyntaxElement::Block(chunk) => write!(f, "{}", chunk),
             SyntaxElement::Chunk(statements) => write!(f, "{}", SyntaxElement::list_to_string(statements,"\n","  ")),
             SyntaxElement::FieldList(list) => write!(f, "<Fields {}>", SyntaxElement::list_to_string(list,", ","")),
@@ -68,6 +69,8 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::StatementLocalAssign(left,Some(right)) => write!(f, "(= local {} {})", left, right),
             SyntaxElement::StatementLocalAssign(left,None) => write!(f, "(= local {})", left),
 
+
+            SyntaxElement::Empty => write!(f, "EMPTY"),
             _ => write!(f, "SyntaxElement not defined!!")
         }
     }
@@ -87,7 +90,6 @@ impl SyntaxElement {
     pub fn ending_token(&self) -> Token {
         //! used to find the ending token of this phrase, to be
         //! used in the block_stack.
-
         match self {
             SyntaxElement::StatementDoEnd(_) => Token::End,
             SyntaxElement::StatementWhile(_,_) => Token::End,
@@ -185,6 +187,7 @@ impl SyntaxElement {
             SyntaxElement::StatementAssign(_,_) |
             SyntaxElement::StatementLocalAssign(_,_) |
             SyntaxElement::StatementDoEnd(_) => true,
+            SyntaxElement::StatementWhile(_,_) => true,
             _ => false,
         }
     }

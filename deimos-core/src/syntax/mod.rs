@@ -13,6 +13,7 @@ pub mod namelist;
 
 use crate::codewrap::CodeWrap;
 
+#[derive(Debug)]
 pub enum SyntaxResult {
     Done,
     Ok(SyntaxElement),

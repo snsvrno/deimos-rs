@@ -29,7 +29,7 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
             // so we can use %2 to tell if we should see a ',' or an 'exp'
             let factor = if let Some(start) = start { i - start } 
                          else { return SyntaxResult::Error(elements[i].start(), elements[i].end(),
-                            "var list, start isn't defined".to_string()); };
+                            "var list, start isn't defined(varlist)".to_string()); };
 
             match factor % 2 {
                 // these are all the odd ones, starting with the one right after the exp
@@ -38,12 +38,11 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
                 // these are the even ones, should all be expressions
                 0 => if let CodeWrap::CodeWrap(SyntaxElement::Var(_),_,_) = elements[i] { } 
                      else { 
-                        return SyntaxResult::Error(elements[i].start(), elements[i].end(),
-                            "var an expression after the comma".to_string()); 
+                        return SyntaxResult::None; 
                      },
 
                 _=> return SyntaxResult::Error(elements[i].start(), elements[i].end(),
-                    "var list, mod is not 1 or 0...".to_string()),
+                    "mod is not 1 or 0...(varlist)".to_string()),
             }
         }
 

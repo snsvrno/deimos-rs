@@ -34,6 +34,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
         match doend::process(phrase) {
             SyntaxResult::Done => continue,
             SyntaxResult::Wrap(wrapped) => return SyntaxResult::Wrap(wrapped),
+            SyntaxResult::Error(s,e,d) => return SyntaxResult::Error(s,e,d),
             _ => { },
         }
 
@@ -41,6 +42,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
         match whiledoend::process(phrase) {
             SyntaxResult::Done => continue,
             SyntaxResult::Wrap(wrapped) => return SyntaxResult::Wrap(wrapped),
+            SyntaxResult::Error(s,e,d) => return SyntaxResult::Error(s,e,d),
             _ => { },
         }
         // repeat block until exp | 

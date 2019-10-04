@@ -92,10 +92,10 @@ impl<'a> Parser<'a>{
                             // check for block
                             // don't do these here, just leaving this so i remember about them
 
-                            println!("-------------------------");
+                            /*println!("-------------------------");
                             for p in phrase.iter() {
                                 println!("{:?}",p.item());
-                            }
+                            }*/
 
                             // check for statement
                             match statement::process(&mut phrase) { 
@@ -110,7 +110,8 @@ impl<'a> Parser<'a>{
                                     // statements, TODO : need to make tests to prove this
                                     phrase = Vec::new();
                                     continue;
-                                }
+                                },
+                                SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
                             // check for laststatement
@@ -119,23 +120,27 @@ impl<'a> Parser<'a>{
                             // check for varlist
                             match varlist::process(&mut phrase) { 
                                 SyntaxResult::Done => continue,
+                                SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
                             
                             // check for var
                             match var::process(&mut phrase) { 
                                 SyntaxResult::Done => continue,
+                                SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
                             // check for namelist
                             match namelist::process(&mut phrase) { 
                                 SyntaxResult::Done => continue,
+                                SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
                             
                             // check for explist
                             match explist::process(&mut phrase) { 
                                 SyntaxResult::Done => continue,
+                                SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
 
@@ -166,6 +171,7 @@ impl<'a> Parser<'a>{
 
                                     continue;
                                 },
+                                SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
                             
@@ -180,6 +186,7 @@ impl<'a> Parser<'a>{
                             // other statements inside of it and checks if we have the closer for the 
                             // current block_stack item
                             let pos = phrase.len() - 1;
+
                             if let CodeWrap::CodeWrap(SyntaxElement::Token(ref token),_, code_end) = phrase[pos] {
                                 // gets the stack_item
                                 let stack_pos = self.block_stack.len() - 1;
@@ -189,7 +196,7 @@ impl<'a> Parser<'a>{
                                     // taking the start and anything addition from inside the `stack_item`
 
                                     // gets the stack
-                                    let (CodeWrap::CodeWrap(ref stack_item, code_start, _), ref mut stack, ref mut prefix) = self.block_stack.remove(stack_pos);
+                                    let (CodeWrap::CodeWrap(stack_item, code_start, _), mut stack, mut prefix) = self.block_stack.remove(stack_pos);
 
                                     // we need to take the stuff left in the phrase (not that last token) and 
                                     // put it in the stack so we can process it correctly.
@@ -202,11 +209,11 @@ impl<'a> Parser<'a>{
                                         // everything to resolve into a fields and not a statements
                                         // so we need a special catch here.
                                         
-                                        SyntaxElement::TableConstructor(_) => tableconstructor::finalize(stack),
-                                        SyntaxElement::StatementDoEnd(_) => statement::doend::finalize(stack),
-                                        //SyntaxElement::StatementWhile(_,_) => statement::whiledoend::finalize(stack),
+                                        SyntaxElement::TableConstructor(_) => tableconstructor::finalize(&mut stack),
+                                        SyntaxElement::StatementDoEnd(_) => statement::doend::finalize(&mut stack),
+                                        SyntaxElement::StatementWhile(cond,_) => statement::whiledoend::finalize(cond, &mut stack),
 
-                                        _ => unimplemented!(),
+                                        _ => unimplemented!("This Statement Type isn't in the Finalize Match"),
                                     };
 
                                     // any error handling
@@ -323,13 +330,8 @@ mod tests {
     // #[ignore]
     pub fn quick_failure_to_see_parse() {
         let code = r#"do
-            local jim
-            local bob = 1 + 4
-            bob = { a = 1, b = 2 }
-
-            do
+            while 2 == 3 do
                 x = x + 1
-                x = -x
             end
         end"#;
 
