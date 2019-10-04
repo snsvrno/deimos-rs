@@ -9,6 +9,7 @@ pub mod varlist;
 pub mod tableconstructor;
 pub mod field;
 pub mod fieldlist;
+pub mod namelist;
 
 use crate::codewrap::CodeWrap;
 

@@ -14,7 +14,7 @@ This is the tracking document that shows what has been implemented for the LUA 5
     - [ ] for namelist in explist do block end | 
     - [ ] function funcname funcbody | 
     - [ ] local function Name funcbody | 
-    - [ ] local namelist [`=´ explist] 
+    - [x] local namelist [`=´ explist] 
 - [ ] laststat
 - [ ] funcname
 - [x] varlist
@@ -22,7 +22,7 @@ This is the tracking document that shows what has been implemented for the LUA 5
     - [x] Name
     - [x] prefixexp `[´ exp `]´
     - [x] prefixexp `.´ Name 
-- [ ] namelist
+- [x] namelist
 - [x] explist
 - [ ] exp
     - [x] nil

@@ -1,5 +1,6 @@
 mod assignment;
 mod doend;
+mod localassignment;
 
 use crate::syntax::{SyntaxResult, SyntaxElement};
 use crate::codewrap::CodeWrap;
@@ -19,7 +20,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
     //! [ ] for namelist in explist do block end | 
     //! [ ] function funcname funcbody | 
     //! [ ] local function Name funcbody | 
-    //! [ ] local namelist [`=´ explist] 
+    //! [x] local namelist [`=´ explist] 
     
     let mut count = 0;
     loop {
@@ -40,8 +41,11 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
         // if exp then block {elseif exp then block} [else block] end | 
         // for Name `=´ exp `,´ exp [`,´ exp] do block end | 
         // for namelist in explist do block end | 
-        // function funcname funcbody | 
-        // local function Name funcbody | 
+        // function funcname funcbody |
+
+        // local function Name funcbody 
+        if localassignment::process(phrase) { continue; }
+        
         // local namelist [`=´ explist]
         
         break;

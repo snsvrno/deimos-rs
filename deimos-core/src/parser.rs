@@ -4,7 +4,7 @@ use crate::codewrap::CodeWrap;
 use crate::scanner::{Scanner,TokenWrapped};
 use crate::syntax::{
     exp, explist, prefixexp, statement, var, varlist, 
-    tableconstructor, field, fieldlist,
+    tableconstructor, field, fieldlist, namelist,
     final_compress,
     SyntaxElement, SyntaxResult
 };
@@ -124,6 +124,10 @@ impl<'a> Parser<'a>{
                                 _ => { },
                             }
                             // check for namelist
+                            match namelist::process(&mut phrase) { 
+                                SyntaxResult::Done => continue,
+                                _ => { },
+                            }
                             
                             // check for explist
                             match explist::process(&mut phrase) { 
@@ -385,11 +389,11 @@ mod tests {
     #[test]
     // #[ignore]
     pub fn quick_failure_to_see_parse() {
-        let code2 = r#"do
-            bob = 5 + 3
-            jim = -3
+        let code = r#"do
+            local jim
+            local bob = 1 + 4
         end"#;
-        let code = r#"bob = { a = 1, b = 2 }"#;
+        let code2 = r#"bob = { a = 1, b = 2 }"#;
 
         match Scanner::from_str(&code,None).scan() {
             Err(error) => println!("{}",error),

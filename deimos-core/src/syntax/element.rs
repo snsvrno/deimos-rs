@@ -7,6 +7,7 @@ pub enum SyntaxElement {
 
     // statements and their children
     StatementAssign(Box<SyntaxElement>, Box<SyntaxElement>),    // the left, the right
+    StatementLocalAssign(Box<SyntaxElement>,Option<Box<SyntaxElement>>), // the varname and option assignment
     StatementDoEnd(Box<SyntaxElement>),
     StatementLast(Option<Box<SyntaxElement>>),
 
@@ -15,6 +16,8 @@ pub enum SyntaxElement {
     Var(Box<SyntaxElement>),
     VarDot(Box<SyntaxElement>, Box<SyntaxElement>),     // left.right
     VarIndex(Box<SyntaxElement>, Box<SyntaxElement>),    // left[right]
+
+    NameList(Vec<Box<SyntaxElement>>),
 
     ExpList(Vec<Box<SyntaxElement>>),
 
@@ -60,6 +63,9 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::FieldAssignment(left,right) => write!(f, "(= {} {})", left, right),
             SyntaxElement::Field(token) => write!(f, "{}", token),
             SyntaxElement::TableConstructor(list) => write!(f, "(Table {})", list),
+            SyntaxElement::NameList(list) => write!(f, "<Name {}>", SyntaxElement::list_to_string(list,", ","")),
+            SyntaxElement::StatementLocalAssign(left,Some(right)) => write!(f, "(= local {} {})", left, right),
+            SyntaxElement::StatementLocalAssign(left,None) => write!(f, "(= local {})", left),
 
             _ => write!(f, "SyntaxElement not defined!!")
         }
@@ -67,6 +73,15 @@ impl std::fmt::Display for SyntaxElement {
 }
 
 impl SyntaxElement {
+
+    pub fn ref_to_inside<'a>(&'a self) -> &SyntaxElement {
+        //! used to return the inside item, a reference
+        
+        match self {
+            SyntaxElement::Var(ref item) => item,
+            _ => unimplemented!(),
+        }
+    }
 
     pub fn ending_token(&self) -> Token {
         //! used to find the ending token of this phrase, to be
@@ -129,6 +144,13 @@ impl SyntaxElement {
         }
     }
 
+    pub fn is_name_list(&self) -> bool {
+        match self {
+            SyntaxElement::NameList(_) => true,
+            _ => false,
+        }
+    }
+
     pub fn is_var(&self) -> bool {
         match self {
             SyntaxElement::Var(_) | 
@@ -156,6 +178,7 @@ impl SyntaxElement {
     pub fn is_statement(&self) -> bool {
         match self {
             SyntaxElement::StatementAssign(_,_) |
+            SyntaxElement::StatementLocalAssign(_,_) |
             SyntaxElement::StatementDoEnd(_) => true,
             _ => false,
         }
@@ -172,6 +195,22 @@ impl SyntaxElement {
         match self {
             SyntaxElement::StatementLast(_) => true,
             _ => false,
+        }
+    }
+
+    pub fn convert_to_name(self) -> Result<SyntaxElement,SyntaxElement> {
+        //! attempts to convert to a name, if it succeeds its Ok() with the 
+        //! new name, if it fails then its Err() with the old element
+        
+        match self {
+            SyntaxElement::Var(token) => {
+                let insides = *token;
+                match insides.is_name() {
+                    true => Ok(insides),
+                    false => Err(SyntaxElement::Var(Box::new(insides))),
+                } 
+            },
+            other_element => Err(other_element),
         }
     }
     
