@@ -11,9 +11,14 @@ pub fn process(elements : &mut Vec<T>) -> bool {
     if elements.len() > 2 { for i in 0 .. elements.len() - 2 {
 
         if can_reduce_to_exp_binop(&elements[i], &elements[i+1], &elements[i+2]) {
-            let CodeWrap::CodeWrap(left, start, _) = elements.remove(i);
+            let CodeWrap::CodeWrap(mut left, start, _) = elements.remove(i);
             let CodeWrap::CodeWrap(op, _, _) = elements.remove(i);
-            let CodeWrap::CodeWrap(right, _, end) = elements.remove(i);
+            let CodeWrap::CodeWrap(mut right, _, end) = elements.remove(i);
+
+            // check if either the left or the right ar lists, we can pop the items because 
+            // we already checked if they are single lists inside the `can_reduce` function
+            left = if let SyntaxElement::ExpList(mut list) = left { *list.remove(0)} else { left };
+            right = if let SyntaxElement::ExpList(mut list) = right { *list.remove(0)} else { right };
 
             // we make the new SyntaxElement element, and add it where 
             // we took it off

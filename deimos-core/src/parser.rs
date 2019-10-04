@@ -92,6 +92,11 @@ impl<'a> Parser<'a>{
                             // check for block
                             // don't do these here, just leaving this so i remember about them
 
+                            println!("-------------------------");
+                            for p in phrase.iter() {
+                                println!("{:?}",p.item());
+                            }
+
                             // check for statement
                             match statement::process(&mut phrase) { 
                                 SyntaxResult::Done => continue,
@@ -199,6 +204,7 @@ impl<'a> Parser<'a>{
                                         
                                         SyntaxElement::TableConstructor(_) => tableconstructor::finalize(stack),
                                         SyntaxElement::StatementDoEnd(_) => statement::doend::finalize(stack),
+                                        //SyntaxElement::StatementWhile(_,_) => statement::whiledoend::finalize(stack),
 
                                         _ => unimplemented!(),
                                     };
@@ -277,17 +283,26 @@ impl<'a> Parser<'a>{
         //! if there are no tokens to return, it returns None
 
         let mut tokens : Vec<CodeWrap<SyntaxElement>> = Vec::new();
-
         loop {
-            // checks that we still have tokens left to pop
-            if self.tokens.len() == 0 { break; }
+            loop {
+                // checks that we still have tokens left to pop
+                if self.tokens.len() == 0 { break; }
 
-            match self.tokens.remove(0) {
-                CodeWrap::CodeWrap(Token::EOL, _, _) | 
-                CodeWrap::CodeWrap(Token::EOF, _, _) => break,
-                CodeWrap::CodeWrap(token, start, end) => tokens.push(CodeWrap::CodeWrap(SyntaxElement::Token(token), start, end)),
+                match self.tokens.remove(0) {
+                    CodeWrap::CodeWrap(Token::EOL, _, _) | 
+                    CodeWrap::CodeWrap(Token::EOF, _, _) => break,
+                    CodeWrap::CodeWrap(token, start, end) => tokens.push(CodeWrap::CodeWrap(SyntaxElement::Token(token), start, end)),
+                }
+
             }
 
+            // need to have this so we can check if we have 
+            // empty lines (blank lines)
+            match ( tokens.len(), self.tokens.len() ) {
+                (0, 0) => break,
+                (0, _) => continue,
+                (_, _) => break,
+            }
         }
 
         match tokens.len() {
@@ -311,6 +326,11 @@ mod tests {
             local jim
             local bob = 1 + 4
             bob = { a = 1, b = 2 }
+
+            do
+                x = x + 1
+                x = -x
+            end
         end"#;
 
         match Scanner::from_str(&code,None).scan() {

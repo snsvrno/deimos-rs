@@ -113,6 +113,7 @@ impl SyntaxElement {
     pub fn is_exp(&self) -> bool {
         match self {
             SyntaxElement::Exp(_) => true,
+            SyntaxElement::ExpList(list) => list.len() == 1,
             _ => false,
         }
     }
@@ -142,6 +143,7 @@ impl SyntaxElement {
     pub fn is_name(&self) -> bool {
         match self {
             SyntaxElement::Token(Token::Identifier(_)) => true,
+            SyntaxElement::NameList(list) => list.len() == 1,
             _ => false,
         }
     }
@@ -157,6 +159,7 @@ impl SyntaxElement {
         match self {
             SyntaxElement::Var(_) | 
             SyntaxElement::VarDot(_,_) => true,
+            SyntaxElement::VarList(list) => list.len() == 1,
             _ => false,
         }
     }

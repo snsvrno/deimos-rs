@@ -22,3 +22,14 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
 
     SyntaxResult::None
 }
+
+pub fn finalize(stack : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
+
+    for i in stack.iter() {
+        println!("{}",i.item());
+    }
+
+    unimplemented!();
+
+    SyntaxResult::None
+}
