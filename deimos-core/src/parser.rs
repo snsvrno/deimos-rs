@@ -85,13 +85,12 @@ impl<'a> Parser<'a>{
                         // this big look was made because a tableconstructor can
                         // become an expression, so i need to be able to go back over this
                         // once we make a tableconstructor (which is handled outside the 
-                        // main loop)
-                    
+                        // main loop)               
+
                         loop {
                             // check for chunk
                             // check for block
                             // don't do these here, just leaving this so i remember about them
-
 
                             // check for statement
                             match statement::process(&mut phrase) { 
@@ -161,7 +160,6 @@ impl<'a> Parser<'a>{
                                     self.block_stack.push((dumb_table_const, Vec::new(), the_before));
 
                                     continue;
-
                                 },
                                 _ => { },
                             }
@@ -169,6 +167,7 @@ impl<'a> Parser<'a>{
                             break;
                         }
 
+                        ///////////////////////////////////////////////
                         // checks for any statement closes in the stack
                         if phrase.len() > 0 && self.block_stack.len() > 0 {
                             // we check the last element of the phrase if its a token,
@@ -193,115 +192,34 @@ impl<'a> Parser<'a>{
                                     stack.append(&mut phrase);
 
                                     // this match will return the code item that we will insert,
-                                    let code_item : CodeWrap<SyntaxElement> = match stack_item {
+                                    let code_item : SyntaxResult = match stack_item {
                                         // Table Constructors are special in that are expecting
                                         // everything to resolve into a fields and not a statements
                                         // so we need a special catch here.
-                                        SyntaxElement::TableConstructor(_) => {
+                                        
+                                        SyntaxElement::TableConstructor(_) => tableconstructor::finalize(stack),
+                                        SyntaxElement::StatementDoEnd(_) => statement::doend::finalize(stack),
 
-                                            // so this will probably be expression lists here?
-                                            // TODO : make this not as hacky?
-                                            // we are going to explode the expression lists back into
-                                            // expressions and then reprocess them as fields and fieldlist
+                                        _ => unimplemented!(),
+                                    };
 
-                                            let mut cursor : usize  = 0;
-                                            loop {
-                                                if cursor >= stack.len() { break; }
-
-                                                if stack[cursor].item().is_exp_list()  {
-                                                    // we found an expression list
-                                                    if let CodeWrap::CodeWrap(SyntaxElement::ExpList(mut list),s,e) = stack.remove(cursor) {
-                                                        let mut first : bool = true;
-                                                        loop {
-                                                            // we remove the last item, and add it to the stack
-                                                            if list.len() == 0 { break; }
-                                                            let item_pos = list.len()-1;
-                                                            let item = list.remove(item_pos);
-                                                            stack.insert(cursor, CodeWrap::CodeWrap(*item, s,e));
-
-                                                            // and we also need to add a comma, because it was removed
-                                                            // when we created the explist earlier in `parse()`
-                                                            if !first {
-                                                                stack.insert(cursor+1, CodeWrap::CodeWrap(SyntaxElement::Token(Token::Comma),s,e));
-                                                            } else { first = false; }
-                                                        }
-                                                    }
-                                                }
-
-                                                cursor += 1;
-                                            }
-
-                                            loop {
-
-                                                // checks for fieldlist
-                                                match fieldlist::process(stack) { 
-                                                    SyntaxResult::Done => continue,
-                                                    // TODO : need to implement the error here
-                                                    _ => { },
-                                                }
-
-                                                // checks for fields
-                                                if field::process(stack) { continue; }
-
-                                                break;
-                                            }
-
-                                            let new_code_wrapped_item = match stack.len() {
-                                                1 => {
-                                                    let CodeWrap::CodeWrap(list, _, _) = stack.remove(0);
-                                                    let table_item = SyntaxElement::TableConstructor(Box::new(list));
-                                                    
-                                                    CodeWrap::CodeWrap(table_item, code_start, code_end)
-                                                },
-                                                _ => {
-                                                    // if it is any other length than 1, something didn't work
-                                                    // it is suppose to be a fieldlist, so a single item
-                                                    // that we can put inside the table constructor.
-                                                    return Err(ParserError::general_error(&self, code_start, code_end, "table definition must be a field list!"));
-                                                }
+                                    // any error handling
+                                    let new_element = match code_item {
+                                        SyntaxResult::Ok(item) => CodeWrap::CodeWrap(item, code_start, code_end),
+                                        SyntaxResult::Error(error_start,error_end,d) => {
+                                            let (e_start, e_end) = match (error_start, error_end) {
+                                                (0, 0) => (code_start, code_end),
+                                                (_, 0) => (error_start, error_start),
+                                                (_, _) => (error_start, error_end),
                                             };
-
-                                            new_code_wrapped_item
-                                        },
-
-                                        // all other types that are here are expecting statements,
-                                        stack_item => {
-
-                                            // makes a block out of all the inside pieces
-                                            let inner_block = match final_compress(stack) {
-                                                SyntaxResult::Error(error_start, error_end, description) =>  {
-                                                    // added this section because i don't know the code when processessing 
-                                                    // so i might return 0,0 for the code reference, and that isn't valid
-                                                    let (e_start, e_end) = match (error_start, error_end) {
-                                                        (0, 0) => (code_start, code_end),
-                                                        (_, 0) => (error_start, error_start),
-                                                        (_, _) => (error_start, error_end),
-                                                    };
-
-                                                    return Err(ParserError::general_error(&self, e_start, e_end, &description));
-                                                },
-                                                SyntaxResult::Wrap(CodeWrap::CodeWrap(inner_block, _, _)) => inner_block,
-                                                _ => unimplemented!(),
-                                            };
-
-                                            // checks if the insides are a block, because they need to be a block
-                                            if !inner_block.is_block() {
-                                                return Err(ParserError::general_error(&self, code_start, code_end, "must be able to reduce down to a block"));
-                                            }
-
-                                            // builds the DoEnd element
-                                            let new_item = match stack_item {
-                                                SyntaxElement::StatementDoEnd(_) => SyntaxElement::StatementDoEnd(Box::new(inner_block)),
-                                                _ => { unimplemented!(); }
-                                            };
-                                            // creates the piece we will inject upwards.
-                                            CodeWrap::CodeWrap(new_item, code_start, code_end)
+                                            return Err(ParserError::general_error(&self, e_start, e_end,&d));
                                         }
+                                        _ => unimplemented!(),
                                     };
 
                                     // we remove the ending token and replace it with the new
                                     // statement block
-                                    phrase.push(code_item);                                
+                                    phrase.push(new_element);                                
 
                                     // and we insert all the prefix stuff (if any)
                                     loop {
@@ -392,8 +310,8 @@ mod tests {
         let code = r#"do
             local jim
             local bob = 1 + 4
+            bob = { a = 1, b = 2 }
         end"#;
-        let code2 = r#"bob = { a = 1, b = 2 }"#;
 
         match Scanner::from_str(&code,None).scan() {
             Err(error) => println!("{}",error),

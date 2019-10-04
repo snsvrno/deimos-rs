@@ -2,7 +2,7 @@ pub type T = CodeWrap<SyntaxElement>;
 
 use crate::token::Token;
 use crate::codewrap::CodeWrap;
-use crate::syntax::{SyntaxResult, SyntaxElement, final_compress};
+use crate::syntax::{SyntaxResult, SyntaxElement};
 
 pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
 
@@ -21,22 +21,4 @@ pub fn process(elements : &mut Vec<T>) -> SyntaxResult {
     }
 
     SyntaxResult::None
-}
-
-pub fn finalize(stack : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
-
-    // makes a block out of all the inside pieces
-    let inner_block = match final_compress(stack) {
-        SyntaxResult::Error(error_start, error_end, description) => return SyntaxResult::Error(error_start, error_end, description),
-        SyntaxResult::Wrap(CodeWrap::CodeWrap(inner_block, _, _)) => inner_block,
-        _ => unimplemented!(),
-    };
-
-    // checks if the insides are a block, because they need to be a block
-    if !inner_block.is_block() {
-        return SyntaxResult::Error(0,0,"must be able to reduce down to a block".to_string());
-    }
-
-    // creates the piece we will inject upwards.
-    SyntaxResult::Ok(SyntaxElement::StatementDoEnd(Box::new(inner_block)))
 }

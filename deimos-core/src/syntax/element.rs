@@ -10,6 +10,7 @@ pub enum SyntaxElement {
     StatementLocalAssign(Box<SyntaxElement>,Option<Box<SyntaxElement>>), // the varname and option assignment
     StatementDoEnd(Box<SyntaxElement>),
     StatementLast(Option<Box<SyntaxElement>>),
+    StatementWhile(Box<SyntaxElement>, Box<SyntaxElement>),
 
     VarList(Vec<Box<SyntaxElement>>),
 
@@ -89,6 +90,7 @@ impl SyntaxElement {
 
         match self {
             SyntaxElement::StatementDoEnd(_) => Token::End,
+            SyntaxElement::StatementWhile(_,_) => Token::End,
             SyntaxElement::TableConstructor(_) => Token::RightMoustache,
             _ => { assert!(false); Token::Nil },
         }
@@ -210,6 +212,16 @@ impl SyntaxElement {
                     false => Err(SyntaxElement::Var(Box::new(insides))),
                 } 
             },
+            other_element => Err(other_element),
+        }
+    }
+
+    pub fn convert_to_var(self) -> Result<SyntaxElement,SyntaxElement> {
+        //! attempts to convert to a var, if it succeeds its Ok() with the 
+        //! new name, if it fails then its Err() with the old element
+        
+        match self {
+            SyntaxElement::Token(token) => Ok(SyntaxElement::Exp(Box::new(SyntaxElement::Token(token)))),
             other_element => Err(other_element),
         }
     }

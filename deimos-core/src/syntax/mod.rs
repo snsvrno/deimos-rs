@@ -15,6 +15,7 @@ use crate::codewrap::CodeWrap;
 
 pub enum SyntaxResult {
     Done,
+    Ok(SyntaxElement),
     Wrap(CodeWrap<SyntaxElement>),
     None,
     TableConst(usize),          // just for tables, it will return the pos of the '{'

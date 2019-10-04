@@ -1,5 +1,5 @@
 
-use crate::syntax::{SyntaxElement,SyntaxResult};
+use crate::syntax::{SyntaxElement,SyntaxResult, fieldlist, field};
 use crate::codewrap::CodeWrap;
 use crate::token::Token;
 
@@ -19,82 +19,68 @@ pub fn process(elements : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
     SyntaxResult::None
 }
 
-/*
-pub fn process(elements : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
-    //! works through the elements and checks if we are trying to make
-    //! a table
-    //!
-    //! [ ] tableconstructor ::= `{´ [fieldlist] `}´
-    //! [ ] fieldlist ::= field {fieldsep field} [fieldsep]
-    //! [ ] field ::= `[´ exp `]´ `=´ exp 
-    //! [ ]           Name `=´ exp 
-    //! [ ]           exp
-    
-    let mut cursor : usize = 0;
-    // contains where the first '{' is and where the '}' is
-    let mut instructions : Option<(usize, usize)>  = None;
+pub fn finalize(stack : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
 
+    // so this will probably be expression lists here?
+    // TODO : make this not as hacky?
+    // we are going to explode the expression lists back into
+    // expressions and then reprocess them as fields and fieldlist
+
+    let mut cursor : usize  = 0;
     loop {
-        // leaves if we reach the end
-        if cursor >= elements.len() { break; }
+        if cursor >= stack.len() { break; }
 
-        if let CodeWrap::CodeWrap(SyntaxElement::Token(Token::LeftMoustache),_,_) = elements[cursor] {
+        if stack[cursor].item().is_exp_list()  {
+            // we found an expression list
+            if let CodeWrap::CodeWrap(SyntaxElement::ExpList(mut list),s,e) = stack.remove(cursor) {
+                let mut first : bool = true;
+                loop {
+                    // we remove the last item, and add it to the stack
+                    if list.len() == 0 { break; }
+                    let item_pos = list.len()-1;
+                    let item = list.remove(item_pos);
+                    stack.insert(cursor, CodeWrap::CodeWrap(*item, s,e));
 
-            // we mark that we found the beginning.
-            let cursor_starting_point : usize = cursor;
-            // a nesting counter, so we don't just stop at the first '}' we see
-            // set at 0 because we are using the same token to start the next 
-            // inner loop
-            let mut nesting_counter : usize = 0;
-            loop {
-                // we are going to try and find the ending token, 
-                // if we close it and find both the start
-                // and the end then we continue. if we don't then
-                // we will send out of the function asking for more tokens.
-                
-                // leaves if we reach the end
-                if cursor >= elements.len() { break; }
-
-                match elements[cursor] {
-                    CodeWrap::CodeWrap(SyntaxElement::Token(Token::LeftMoustache),_,_) => nesting_counter += 1,
-                    CodeWrap::CodeWrap(SyntaxElement::Token(Token::RightMoustache),_,_) => { 
-                        nesting_counter -= 1;
-
-                        if nesting_counter == 0 {
-                            // we found the end, we need to do something here.
-                            instructions = Some((cursor_starting_point, cursor));
-                            cursor = elements.len(); // so we leave all these loops.
-                        }
-                    },
-                    _ => { },
+                    // and we also need to add a comma, because it was removed
+                    // when we created the explist earlier in `parse()`
+                    if !first {
+                        stack.insert(cursor+1, CodeWrap::CodeWrap(SyntaxElement::Token(Token::Comma),s,e));
+                    } else { first = false; }
                 }
-                
-                cursor += 1;
             }
-
-            // if we are here we found the start but never found the end
-            // so we need to ask the parser for more tokens
-            if instructions.is_none() { return SyntaxResult::More; }
-
-            break;
         }
 
         cursor += 1;
     }
 
-    println!("{:?}",instructions);
+    loop {
 
-    if let Some((start, end)) = instructions {
-        let mut inner_tokens : Vec<CodeWrap<SyntaxElement>> = elements.drain(start .. end).collect();
-        let CodeWrap::CodeWrap(_, _, code_end) = inner_tokens.remove(inner_tokens.len()-1);
-        let CodeWrap::CodeWrap(_, code_start, _) = inner_tokens.remove(0);
-
-        println!("inside of the table");
-        for i in inner_tokens.iter() {
-            println!("     {}",i.item());
+        // checks for fieldlist
+        match fieldlist::process(stack) { 
+            SyntaxResult::Done => continue,
+            // TODO : need to implement the error here
+            _ => { },
         }
+
+        // checks for fields
+        if field::process(stack) { continue; }
+
+        break;
     }
 
+    let new_code_wrapped_item = match stack.len() {
+        1 => {
+            let CodeWrap::CodeWrap(list, _, _) = stack.remove(0);
 
-    SyntaxResult::None
-}*/
+            SyntaxElement::TableConstructor(Box::new(list))
+        },
+        _ => {
+            // if it is any other length than 1, something didn't work
+            // it is suppose to be a fieldlist, so a single item
+            // that we can put inside the table constructor.
+            return SyntaxResult::Error(0,0, "table definition must be a field list!".to_string());
+        }
+    };
+
+    SyntaxResult::Ok(new_code_wrapped_item)
+}

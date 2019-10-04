@@ -1,10 +1,10 @@
 mod assignment;
-mod doend;
 mod localassignment;
+pub mod doend;
+pub mod whiledoend;
 
 use crate::syntax::{SyntaxResult, SyntaxElement};
 use crate::codewrap::CodeWrap;
-use crate::token::Token;
 
 pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
     //! works through thelements and checks if any of the following 
@@ -36,7 +36,13 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
             SyntaxResult::Wrap(wrapped) => return SyntaxResult::Wrap(wrapped),
             _ => { },
         }
+
         // while exp do block end | 
+        match whiledoend::process(phrase) {
+            SyntaxResult::Done => continue,
+            SyntaxResult::Wrap(wrapped) => return SyntaxResult::Wrap(wrapped),
+            _ => { },
+        }
         // repeat block until exp | 
         // if exp then block {elseif exp then block} [else block] end | 
         // for Name `=´ exp `,´ exp [`,´ exp] do block end | 
