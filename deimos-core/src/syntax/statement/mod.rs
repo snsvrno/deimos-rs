@@ -13,7 +13,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
     //! [x] varlist `=´ explist | 
     //! [ ] functioncall | 
     //! [x] do block end | 
-    //! [ ] while exp do block end | 
+    //! [x] while exp do block end | 
     //! [ ] repeat block until exp | 
     //! [ ] if exp then block {elseif exp then block} [else block] end | 
     //! [ ] for Name `=´ exp `,´ exp [`,´ exp] do block end | 
@@ -45,6 +45,7 @@ pub fn process(phrase : &mut Vec<CodeWrap<SyntaxElement>>) -> SyntaxResult {
             SyntaxResult::Error(s,e,d) => return SyntaxResult::Error(s,e,d),
             _ => { },
         }
+        
         // repeat block until exp | 
         // if exp then block {elseif exp then block} [else block] end | 
         // for Name `=´ exp `,´ exp [`,´ exp] do block end | 

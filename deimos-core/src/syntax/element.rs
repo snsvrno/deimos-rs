@@ -9,8 +9,10 @@ pub enum SyntaxElement {
     StatementAssign(Box<SyntaxElement>, Box<SyntaxElement>),    // the left, the right
     StatementLocalAssign(Box<SyntaxElement>,Option<Box<SyntaxElement>>), // the varname and option assignment
     StatementDoEnd(Box<SyntaxElement>),
-    StatementLast(Option<Box<SyntaxElement>>),
+    StatementLastReturn(Option<Box<SyntaxElement>>),
+    StatementLastBreak,
     StatementWhile(Box<SyntaxElement>, Box<SyntaxElement>),
+
 
     VarList(Vec<Box<SyntaxElement>>),
 
@@ -68,6 +70,9 @@ impl std::fmt::Display for SyntaxElement {
             SyntaxElement::NameList(list) => write!(f, "<Name {}>", SyntaxElement::list_to_string(list,", ","")),
             SyntaxElement::StatementLocalAssign(left,Some(right)) => write!(f, "(= local {} {})", left, right),
             SyntaxElement::StatementLocalAssign(left,None) => write!(f, "(= local {})", left),
+            SyntaxElement::StatementLastBreak => write!(f, "break"),
+            SyntaxElement::StatementLastReturn(None) => write!(f, "return"),
+            SyntaxElement::StatementLastReturn(Some(list)) => write!(f, "return {}", list),
 
 
             SyntaxElement::Empty => write!(f, "EMPTY"),
@@ -201,7 +206,8 @@ impl SyntaxElement {
 
     pub fn is_last_statement(&self) -> bool {
         match self {
-            SyntaxElement::StatementLast(_) => true,
+            SyntaxElement::StatementLastReturn(_) |
+            SyntaxElement::StatementLastBreak => true,
             _ => false,
         }
     }

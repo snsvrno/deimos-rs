@@ -7,7 +7,7 @@ This is the tracking document that shows what has been implemented for the LUA 5
     - [x] varlist `=´ explist | 
     - [ ] functioncall | 
     - [x] do block end | 
-    - [ ] while exp do block end | 
+    - [x] while exp do block end | 
     - [ ] repeat block until exp | 
     - [ ] if exp then block {elseif exp then block} [else block] end | 
     - [ ] for Name `=´ exp `,´ exp [`,´ exp] do block end | 

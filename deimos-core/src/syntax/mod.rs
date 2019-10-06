@@ -10,6 +10,7 @@ pub mod tableconstructor;
 pub mod field;
 pub mod fieldlist;
 pub mod namelist;
+pub mod laststatement;
 
 use crate::codewrap::CodeWrap;
 

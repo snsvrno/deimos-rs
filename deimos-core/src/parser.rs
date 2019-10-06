@@ -4,7 +4,7 @@ use crate::codewrap::CodeWrap;
 use crate::scanner::{Scanner,TokenWrapped};
 use crate::syntax::{
     exp, explist, prefixexp, statement, var, varlist, 
-    tableconstructor, field, fieldlist, namelist,
+    tableconstructor, field, fieldlist, namelist, laststatement,
     final_compress,
     SyntaxElement, SyntaxResult
 };
@@ -92,10 +92,10 @@ impl<'a> Parser<'a>{
                             // check for block
                             // don't do these here, just leaving this so i remember about them
 
-                            /*println!("-------------------------");
+                            println!("-------------------------");
                             for p in phrase.iter() {
                                 println!("{:?}",p.item());
-                            }*/
+                            }
 
                             // check for statement
                             match statement::process(&mut phrase) { 
@@ -114,7 +114,10 @@ impl<'a> Parser<'a>{
                                 SyntaxResult::Error(s,e,d) => return Err(ParserError::general_error(&self, s, e, &d)),
                                 _ => { },
                             }
+
                             // check for laststatement
+                            if laststatement::process(&mut phrase) { continue; }
+                            
                             // check for funcname
                             
                             // check for varlist
@@ -332,6 +335,7 @@ mod tests {
         let code = r#"do
             while 2 == 3 do
                 x = x + 1
+                return x + 1
             end
         end"#;
 
