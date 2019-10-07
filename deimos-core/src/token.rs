@@ -1,7 +1,8 @@
-use crate::codewrap::CodeWrappable;
+use crate::coderef::CodeRef;
+
+pub type CodeToken = CodeRef<Token>; 
 
 #[derive(Debug,PartialEq)]
-#[allow(dead_code)]
 pub enum Token {
     
     // single-character tokens /////////////////////
@@ -40,22 +41,53 @@ pub enum Token {
     EOF,
 }
 
-impl CodeWrappable for Token { }
-
-
-impl std::fmt::Display for Token {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Token::Number(number) => write!(f, "{}", number),
-            Token::Identifier(string) => write!(f, "{}", string),
-            Token::String(string) => write!(f, "'{}'", string),
-            _ => write!(f, "{:?}", self)
-        }
+impl PartialEq<Token> for &Token {
+    // implemented so i can compare variables to raw tokens
+    // (static tokens) without doing `&Token::Do`
+    fn eq(&self, other: &Token) -> bool {
+        self == &other
     }
 }
 
-#[allow(dead_code)]
 impl Token {
+
+    pub fn len(&self) -> usize {
+        match self {
+            Token::Plus  |          Token::Minus  |         Token::Star |
+            Token::Slash |          Token::Percent |        Token::Carrot |
+            Token::Pound |          Token::LessThan |       Token::GreaterThan |
+            Token::Equal |          Token::LeftParen |      Token::RightParen |
+            Token::LeftMoustache |  Token::RightMoustache | Token::LeftBracket |
+            Token::RightBracket |   Token::SemiColon |      Token::Colon |
+            Token::Comma |          Token::Period |  Token::WhiteSpace
+                => 1,
+            Token::DoublePeriod |   Token::EqualEqual |     Token::NotEqual |
+            Token::GreaterEqual |   Token::LessEqual |      Token::Do |
+            Token::In |             Token::If |             Token::Or
+                => 2,
+            Token::TriplePeriod | Token::And | Token::End | Token::For | 
+            Token::Nil | Token::Not
+                => 3,
+            Token::Else | Token::Then | Token::True 
+                => 4,
+            Token::Break | Token::Until | Token::While | Token::False | Token::Local 
+                => 5,
+            Token::Elseif | Token::Repeat | Token::Return
+                => 6,
+            Token::Function
+                => 8,
+            Token::EOL | Token::EOF 
+                => 0,
+
+            Token::Identifier(string) => string.len(),
+            Token::String(string) => string.len() + 2,
+            Token::Number(number) => format!("{}",number).len(),
+            Token::MultiLineString(string) => string.len() + 2, // TODO : FIX THIS THING
+
+            Token::Comment(string) => string.len(),
+
+        }
+    }
 
     pub fn is_eol(char : &str) -> bool {
         //! checks if the string is an end of line character
@@ -129,39 +161,6 @@ impl Token {
         }
         
         false
-    }
-
-    pub fn inner_text(&self) -> String {
-        //! only for use with testing, is unsafe.
-        
-        match self {
-            Token::Identifier(text) | 
-            Token::String(text) | 
-            Token::MultiLineString(text) | 
-            Token::Comment(text) => text.to_string(),
-
-            _ => unimplemented!(),
-        }
-    }
-
-    pub fn is_same_type(&self, other : &Token) -> bool {
-        //! checks if the two tokens are the same type, there are only
-        //! a few cases where we can't rely on ==, defined below.
-        
-        match (self,other) {
-
-            // these are the only cases where we can't use == because 
-            // they have members that might be different, but we only
-            // care about the type (if we are using this function).
-            ( Token::Identifier(_), Token::Identifier(_) ) => true,
-            ( Token::String(_), Token::String(_) ) => true,
-            ( Token::MultiLineString(_), Token::MultiLineString(_) ) => true,
-            ( Token::Number(_), Token::Number(_) ) => true,
-            ( Token::Comment(_), Token::Comment(_) ) => true,
-
-            // fallback to PartialEq / Eq
-            _ => self == other
-        }
     }
 
     pub fn match_keyword(word : &str) -> Option<Token> {
