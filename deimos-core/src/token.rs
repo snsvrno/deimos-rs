@@ -41,6 +41,17 @@ pub enum Token {
     EOF,
 }
 
+impl std::fmt::Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Token::String(string) => write!(f, "\"{}\"",string),
+            Token::Number(number) => write!(f, "{}",number),
+            Token::Identifier(var_name) => write!(f, "{}",var_name),
+            token => write!(f, "{:?}", token),
+        }
+    }
+}
+
 impl PartialEq<Token> for &Token {
     // implemented so i can compare variables to raw tokens
     // (static tokens) without doing `&Token::Do`
@@ -189,6 +200,55 @@ impl Token {
             "until" => Some(Token::Until),
             "while" => Some(Token::While),
             _ => None,
+        }
+    }
+
+    pub fn is_name(&self) -> bool {
+        match self {
+            Token::Identifier(_) => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_binop(&self) -> bool {
+        //! checks if a token and then a binop token
+        //! 
+        //! [x] `+´ 
+        //! [x] `-´ 
+        //! [x] `*´ 
+        //! [x] `/´ 
+        //! [x] `^´ 
+        //! [x] `%´ 
+        //! [x] `..´ 
+        //! [x] `<´ 
+        //! [x] `<=´ 
+        //! [x] `>´ 
+        //! [x] `>=´ 
+        //! [x] `==´ 
+        //! [x] `~=´ 
+        //! [x] and 
+        //! [x] or
+
+        match self {
+            Token::Plus | Token::Minus | Token::Star | Token::Slash | 
+            Token::Carrot | Token::Percent | Token::DoublePeriod | Token::GreaterThan | 
+            Token::GreaterEqual | Token::LessThan | Token::LessEqual | Token::EqualEqual | 
+            Token::NotEqual | Token::And | Token::Or => true,
+            _ => false,
+        }
+
+    }
+
+    pub fn is_unop(&self) -> bool {
+        //! checks if the item is a token, and then a unop token
+        //! 
+        //! [x] `-´
+        //! [x] not
+        //! [x] `#´
+
+        match self {
+            Token::Minus | Token::Not | Token::Pound => true,
+            _ => false,
         }
     }
 }

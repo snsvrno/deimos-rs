@@ -157,7 +157,7 @@ impl<'a> Scanner<'a> {
         let code_token = CodeRef { 
             item : token, 
             code_start, 
-            code_end : token_length,
+            code_end : token_length + code_start,
             line_number : self.line_number 
         };
         Ok(Some(code_token))
@@ -492,12 +492,12 @@ impl<'a> Scanner<'a> {
 mod tests {
 
     #[test]
-    // #[ignore]
+    #[ignore]
     pub fn test_failure() {
         use crate::scanner::Scanner;
 
         let code : &str = r#"
-        x = @ x + 5
+        x = x + 5
         "#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua"));

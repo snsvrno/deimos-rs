@@ -1,8 +1,10 @@
 pub mod codeinfo; use codeinfo::CodeInfo;
 pub mod scanner;
+pub mod parser;
 
 const LEFT_PADDING : &str = "  ";
 const MARKER : &str = "^";
+const TERMINAL_WIDTH : usize = 70;
 
 pub fn display_error_general(f : &mut std::fmt::Formatter<'_>, description : &str) -> std::fmt::Result {
     //! a general error message, this doesn't show code, instead some general message 
@@ -20,12 +22,12 @@ pub fn display_error(f : &mut std::fmt::Formatter<'_>, error_type : &str, info :
         error_type = error_type,
         file = info.file_name,
         line = pad_number(info.line_number, 4),
-        code_start = position_on_line,
+        code_start = position_on_line + 1,
         line2 = format!("{}",info.line_number),
         code = slice_code(&info.raw_code, info.cursor_pos),
         padding = LEFT_PADDING,
         arrow = arrow,
-        description = new_line_format(&info.description, 40, arrow.len() + LEFT_PADDING.len() + 6),
+        description = new_line_format(&info.description, TERMINAL_WIDTH, arrow.len() + LEFT_PADDING.len() + 6),
     )
 }
 
@@ -64,7 +66,7 @@ fn get_position_on_line(code : &str, start : usize) -> usize {
     //! gets where the start is relative to the start of that line
     
     use crate::token::Token;
-
+    
     // determines where the start of the line is
     let line_start : usize = {
         let mut pos : usize = start;
@@ -82,7 +84,8 @@ fn get_position_on_line(code : &str, start : usize) -> usize {
     // and we go forward until we don't get a whitespace
     for i in line_start .. code.len() {
         if &code[i .. i+1] != " " {
-            return start - i - 1;
+            println!("{} {} {}",start, line_start, i);
+            return start - i;
         }
     }
     
