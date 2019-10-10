@@ -66,23 +66,6 @@ impl<'a> Parser<'a> {
             return Err(ParserError::general("can't run parse more than once."));
         }
 
-        let mut working_element = Element::new();
-
-        loop {
-            match self.get_next_element()? {
-                None => break,
-                Some(element) => {
-                    working_element.add_to_elements(element);
-                }
-            }
-        }
-
-        Ok(self)
-    }
-
-    fn get_next_element(&mut self) -> Result<Option<CodeElement>,Error> {
-        //! gets the next element
-
         let mut working_phrase : Vec<CodeElement> = Vec::new();
 
         loop {
@@ -97,12 +80,14 @@ impl<'a> Parser<'a> {
 
                     loop {
 
-                        /*println!("=====");
+                        println!("=====");
                         for s in statement.iter() {
                             println!("{}:{}:{}",s,s.code_start(), s.code_end());
-                        }*/
+                        }
 
                         // stat ::=  varlist `=´ explist | 
+                        if Parser::statement_assignment(&mut statement)? { continue; }
+                        
                         // stat ::=  functioncall | 
                         // stat ::=  do block end | 
                         // stat ::=  while exp do block end | 
@@ -133,7 +118,6 @@ impl<'a> Parser<'a> {
 
                         // exp ::=  unop exp
 
-
                         // prefixexp ::= var | functioncall | `(´ exp `)´
 
                         // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
@@ -158,7 +142,7 @@ impl<'a> Parser<'a> {
                     // then we can add it to the working_phrase and move on.
                     match statement.len() {
                         1 => working_phrase.push(statement.remove(0)),
-                        0 => return Err(ParserError::general("parser found an empty working_phrase?")),
+                        0 => return Err(ParserError::general("parser found an empty statement?")),
                         _ => return Err(ParserError::not_a_statement(&self,
                             statement[0].line_number(), statement[0].code_start(),
                             statement[statement.len()-1].code_end()))
@@ -167,9 +151,53 @@ impl<'a> Parser<'a> {
             }
         }
 
-        // now we need to check if we can build a chunk and block out of the working_phrase
+        if working_phrase.len() == 0 {
+            return Err(ParserError::general("parser found empty `working_phrase`?"))
+        }
 
-        Ok(None)
+        // now we need to check if we can build a chunk and block out of the working_phrase
+        for i in 0 .. working_phrase.len() - 1 {
+            // checking all but the last element if it is a statement.
+            if !working_phrase[i].i().is_statement() {
+                return Err(ParserError::not_a_statement(&self,
+                    working_phrase[i].line_number(), 
+                    working_phrase[i].code_start(),
+                    working_phrase[i].code_end()
+                ));
+            }
+        }
+
+        // assuming that all passed, lets check if the last elemnet is a statement or last_statemnet
+        if !(working_phrase[working_phrase.len()-1].i().is_statement() 
+            || working_phrase[working_phrase.len()-1].i().is_last_statement()
+        ) {
+            let pos = working_phrase.len()-1;
+            return Err(ParserError::not_a_statement(&self,
+                working_phrase[pos].line_number(),
+                working_phrase[pos].code_start(),
+                working_phrase[pos].code_end()
+            ));
+        }
+
+        // everything check'd out, so lets build that chunk / block
+        
+        let chunk = {
+            let code_start : usize = working_phrase[0].code_start();
+            let line_number : usize = working_phrase[0].line_number();
+            let code_end : usize = working_phrase[working_phrase.len()-1].code_end();
+
+            CodeRef {
+                item : Element::create(vec![], working_phrase)?, 
+                code_start, 
+                code_end,
+                line_number,
+
+            }
+        };
+
+        self.blocks = Some(chunk);
+
+        Ok(self)
     }
 
     fn get_next_statement(&mut self) -> Option<Vec<CodeElement>> {
@@ -233,6 +261,40 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn statement_assignment(statement: &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! varlist `=´ explist
+
+        if statement.len() == 3 {
+            if let Some(ref token) = statement[1].i().get_token() {
+                if token.i() == Token::Equal 
+                && statement[0].i().is_var_list()
+                && statement[2].i().is_exp_list() {
+                    
+                    let vars = statement.remove(0);
+                    let op = statement.remove(0);
+                    let exp = statement.remove(0);
+
+                    let code_start = vars.code_start();
+                    let code_end = exp.code_end();
+                    let line_number = vars.line_number();
+
+                    let new_element = Element::create(
+                        vec![op],
+                        vec![vars, exp])?;
+
+                    statement.insert(0,CodeRef{
+                        item : new_element,
+                        code_start, code_end, line_number
+                    });
+
+                    return Ok(true);
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
 }
 
 #[cfg(test)]
@@ -245,20 +307,16 @@ mod tests {
         use crate::parser::Parser;
 
         let code : &str = r#"
-        x + 5 + 6 + 7 + 8
+        x = 1 + 2
         "#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua")).unwrap();
         let parser = Parser::from_scanner(scanner);
 
         match parser {
-            Ok(parser) => { 
-
-            },
+            Ok(_) => { },
             Err(error) => { println!("{}",error); assert!(false); },
         }
-
-        assert!(false)
     }
 
 }

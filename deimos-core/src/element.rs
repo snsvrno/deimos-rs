@@ -106,6 +106,8 @@ impl Element {
 	}
 
 	// THE SYNTAX FUNCTIONS ////////////////////////////////////////
+	// this section of code takes the lua specification (duplicated in LUA-SPEC.md)
+	// and implements checks on the element struct.
 	
 	pub fn is_block(&self) -> bool {
 		self.is_chunk()
@@ -146,7 +148,7 @@ impl Element {
         let Element { ref identifiers, ref elements } = self;
 
         // varlist `=´ explist  
-       	if identifiers.len() == 0  && elements.len() == 2 {
+       	if identifiers.len() == 1  && elements.len() == 2 {
         	if identifiers[0] == Token::Equal {
         		if elements[0].i().is_var_list() && elements[1].i().is_exp_list() {
         			return true;
@@ -666,6 +668,9 @@ impl Element {
 
 		false
 	}
+
+	// these aren't in the spec (explicitly) but useful checks that make things 
+	// easier.
 
 	pub fn is_token(&self) -> bool {
         //! checks if this element is actually a wrapped token,
