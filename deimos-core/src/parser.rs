@@ -154,8 +154,10 @@ impl<'a> Parser<'a> {
                         break;
                     }
 
+                    // checks if we reduced it down to a single element, if so 
+                    // then we can add it to the working_phrase and move on.
                     match statement.len() {
-                        // 1 => working_phrase.push(statement),
+                        1 => working_phrase.push(statement.remove(0)),
                         0 => return Err(ParserError::general("parser found an empty working_phrase?")),
                         _ => return Err(ParserError::not_a_statement(&self,
                             statement[0].line_number(), statement[0].code_start(),
@@ -163,9 +165,9 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-
-
         }
+
+        // now we need to check if we can build a chunk and block out of the working_phrase
 
         Ok(None)
     }

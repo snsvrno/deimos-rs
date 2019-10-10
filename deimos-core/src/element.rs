@@ -107,18 +107,292 @@ impl Element {
 
 	// THE SYNTAX FUNCTIONS ////////////////////////////////////////
 	
+	pub fn is_block(&self) -> bool {
+		self.is_chunk()
+	}
+
+	pub fn is_chunk(&self) -> bool {
+
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() == 0 && elements.len() > 0 {
+        	// checks that all but the elements are statements
+        	for i in 0 .. elements.len()-1 {
+        		if !elements[i].i().is_statement() { return false; }
+        	}
+
+        	// checks if the last elmenet is a last_statement or a statemnet 
+        	if elements[elements.len()-1].i().is_statement() || elements[elements.len()-1].i().is_last_statement() {
+        		return true;
+        	}
+        }
+
+        false
+	}
+
+	pub fn is_statement(&self) -> bool {
+		//! [x] varlist `=´ explist  
+        //! [x] functioncall  
+        //! [x] do block end  
+        //! [x] while exp do block end  
+        //! [x] repeat block until exp  
+        //! [x] if exp then block {elseif exp then block} [else block] end  
+        //! [x] for Name `=´ exp `,´ exp [`,´ exp] do block end  
+        //! [x] for namelist in explist do block end  
+        //! [x] function funcname funcbody  
+        //! [x] local function Name funcbody  
+        //! [x] local namelist [`=´ explist] 
+
+        let Element { ref identifiers, ref elements } = self;
+
+        // varlist `=´ explist  
+       	if identifiers.len() == 0  && elements.len() == 2 {
+        	if identifiers[0] == Token::Equal {
+        		if elements[0].i().is_var_list() && elements[1].i().is_exp_list() {
+        			return true;
+        		}
+        	}
+        }
+
+        if self.is_function_call() { return true; }
+
+        // do block end  
+        if identifiers.len() == 2 && elements.len() == 1 {
+        	if identifiers[0] == Token::Do 
+        	&& identifiers[1] == Token::End 
+        	&& elements[0].i().is_block() {
+        		return true;
+        	}
+        }
+
+        // while exp do block end  
+        if identifiers.len() == 3 && elements.len() == 2 {
+        	if identifiers[0] == Token::While 
+        	&& identifiers[1] == Token::Do 
+        	&& identifiers[2] == Token::End 
+        	&& elements[0].i().is_exp() 
+        	&& elements[1].i().is_block() {
+    			return true;
+    		}
+        }
+
+        // repeat block until exp 
+        if identifiers.len() == 2 && elements.len() == 1 {
+        	if identifiers[0] == Token::Repeat 
+        	&& identifiers[1] == Token::Until 
+        	&& elements[0].i().is_block() 
+        	&& elements[1].i().is_exp(){
+        		return true;
+        	}
+        }
+
+        // if exp then block {elseif exp then block} [else block] end  
+		if identifiers.len() >= 3 && elements.len() >= 2 {
+        	if identifiers[0] == Token::If
+        	&& identifiers[1] == Token::Then
+        	&& identifiers[identifiers.len()-1] == Token::End
+        	&& elements[0].i().is_exp()
+        	&& elements[elements.len()-1].i().is_block() {
+        		return true;
+        		// TODO should we check more here?
+        	}
+        }
+
+        // for Name `=´ exp `,´ exp [`,´ exp] do block end  
+        if identifiers.len() >= 4 && elements.len() >= 4 {
+        	if identifiers[0] == Token::For
+        	&& identifiers[1] == Token::Equal
+        	&& identifiers[2] == Token::Comma
+        	&& identifiers[identifiers.len() - 1] == Token::End
+        	&& identifiers[identifiers.len() - 2] == Token::Do
+        	&& elements[0].i().is_name()
+        	&& elements[1].i().is_exp()
+        	&& elements[2].i().is_exp()
+        	&& elements[elements.len()-1].i().is_block() {
+        		return true;
+        	}
+
+        }
+
+        // for namelist in explist do block end  
+        if identifiers.len() == 4 && elements.len() == 3 {
+        	if identifiers[0] == Token::For
+        	&& identifiers[1] == Token::In
+        	&& identifiers[2] == Token::Do
+        	&& identifiers[2] == Token::End
+        	&& elements[0].i().is_name_list()
+        	&& elements[1].i().is_exp_list()
+        	&& elements[2].i().is_block() {
+        		return true;
+        	}
+        }
+
+		// function funcname funcbody  
+		if identifiers.len() == 1 && elements.len() == 2 {
+			if identifiers[0] == Token::Function
+			&& elements[0].i().is_func_name()
+			&& elements[1].i().is_func_body() {
+				return true;
+			}
+		}
+
+        // local function Name funcbody  
+        if identifiers.len() == 2 && elements.len() == 2 {
+			if identifiers[0] == Token::Local
+			&& identifiers[1] == Token::Function
+			&& elements[0].i().is_func_name()
+			&& elements[1].i().is_func_body() {
+				return true;
+			}
+        }
+
+        // local namelist [`=´ explist]
+        if identifiers.len() == 2 && elements.len() == 2 {
+        	if identifiers[0] == Token::Local
+			&& identifiers[1] == Token::Equal
+			&& elements[0].i().is_name_list()
+			&& elements[1].i().is_exp_list() {
+				return true;
+			}
+        }
+
+        false
+	}
+
+	pub fn is_last_statement(&self) -> bool {
+		//! [x] return [explist]
+		//! [x] break
+ 
+        if let Some(token) = self.get_token() {
+        	match token.item() {
+        		Token::Return | Token::Break => return true,
+        		_ => { },
+        	}
+        }
+
+        let Element { ref identifiers, ref elements } = self;
+        if identifiers.len() == 1 && elements.len() == 1 {
+    		if identifiers[0] == Token::Return && elements[0].i().is_exp_list() {
+    			return true;
+    		}
+        }
+
+        false
+	}
+
+	pub fn is_func_name(&self) -> bool {
+		//! [x] Name {`.´ Name} [`:´ Name]
+
+		if self.is_name() { return true; }
+
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() > 0 && elements.len() == identifiers.len() + 1 {
+        	
+        	// checks if all the elements are names
+        	let elements_ok : bool = {
+        		let mut names : usize = 0;
+        		for e in elements.iter() {
+        			if e.i().is_name() { names += 1; }
+        		}
+        		names == identifiers.len()
+        	};
+
+        	// checks the identifiers
+			let identifiers_ok : bool = {
+				let mut passed_ids : usize = 0;
+
+				for i in 0 .. identifiers.len() - 1 {
+					if identifiers[i] == Token::Period { passed_ids += 1; }
+				}
+
+				if identifiers[identifiers.len()-1] == Token::Period || identifiers[identifiers.len()-1] == Token::Colon {
+					passed_ids += 1;
+				}
+
+				passed_ids == identifiers.len()
+			};
+
+			// the final check
+			if identifiers_ok && elements_ok { return true; }     	
+        }
+
+		false
+	}
+
 	pub fn is_var(&self) -> bool {
-		//! checks if the element is a var
-		//!
 		//! [x] Name 
-		//! [ ] prefixexp `[´ exp `]´ 
-		//! [ ] prefixexp `.´ Name 
+		//! [x] prefixexp `[´ exp `]´ 
+		//! [X] prefixexp `.´ Name 
 
 		if let Some(token) = self.get_token() {
 			if token.i().is_name() { return true; }
 		}
 
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() == 2 && elements.len() == 2 {
+        	if identifiers[0] == Token::LeftBracket
+			&& identifiers[1] == Token::RightBracket
+			&& elements[0].i().is_prefix_exp()
+			&& elements[1].i().is_exp() {
+				return true;
+			}
+        }
+
+        if identifiers.len() == 1 && elements.len() == 2 {
+        	if identifiers[0] == Token::Period
+			&& elements[0].i().is_prefix_exp()
+			&& elements[1].i().is_name() {
+				return true;
+			}
+        }
+
 		false
+	}
+
+	pub fn is_var_list(&self) -> bool {
+		
+		if self.is_var() { return true; }
+
+
+        let Element { ref identifiers, ref elements } = self;
+        if identifiers.len() == 0 && elements.len() > 0 {
+        	for i in 0 .. elements.len() {
+        		if !elements[i].i().is_var() { return false; }
+        	}
+        	return true;
+        }
+
+        false
+	}
+
+	pub fn is_name(&self) -> bool {
+
+        if let Some(token) = self.get_token() {
+        	match token.item() {
+        		Token::Identifier(_) => return true,
+        		_ => { },
+        	}
+        }
+
+		false
+	}
+
+	pub fn is_name_list(&self) -> bool {
+		
+		if self.is_name() { return true; }
+
+
+        let Element { ref identifiers, ref elements } = self;
+        if identifiers.len() == 0 && elements.len() > 0 {
+        	for i in 0 .. elements.len() {
+        		if !elements[i].i().is_name() { return false; }
+        	}
+        	return true;
+        }
+
+        false
 	}
 
 	pub fn is_exp(&self) -> bool {
@@ -130,9 +404,9 @@ impl Element {
 		//! [x] Number
 		//! [x] String 
 		//! [x] `...´ 		
-		//! [ ] function 
+		//! [x] function 
         //! [x] prefixexp
-        //! [ ] tableconstructor
+        //! [x] tableconstructor
         //! [x] exp binop exp
         //! [x] unop exp 
 
@@ -147,6 +421,8 @@ impl Element {
         }
 
         if self.is_prefix_exp() { return true; }
+        if self.is_function() { return true; }
+        if self.is_table_constructor() { return true; }
 
         let Element { ref identifiers, ref elements } = self;
 
@@ -168,14 +444,31 @@ impl Element {
         false
 	}
 
+	pub fn is_exp_list(&self) -> bool {
+		
+		if self.is_exp() { return true; }
+
+
+        let Element { ref identifiers, ref elements } = self;
+        if identifiers.len() == 0 && elements.len() > 0 {
+        	for i in 0 .. elements.len() {
+        		if !elements[i].i().is_exp() { return false; }
+        	}
+        	return true;
+        }
+
+        false
+	}
+
 	pub fn is_prefix_exp(&self) -> bool {
 		//! checks if this is a prefix expression
 		//! 
 		//! [x] var 
-		//! [ ] functioncall 
+		//! [x] functioncall 
 		//! [x] `(´ exp `)´
 
 		if self.is_var() { return true; }
+		if self.is_function_call() { return true; }
 
         let Element { ref identifiers, ref elements } = self;
 
@@ -187,6 +480,191 @@ impl Element {
         }
 
         false
+	}
+
+	pub fn is_function_call(&self) -> bool {
+		//! [x] prefixexp args
+		//! [x] prefixexp `:´ Name args 
+        
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() == 0 && elements.len() == 2 {
+        	if elements[0].i().is_prefix_exp()
+        	&& elements[1].i().is_args() {
+        		return true;
+        	}
+        }
+
+        if identifiers.len() == 1 && elements.len() == 3 {
+        	if identifiers[0] == Token::Colon
+        	&& elements[0].i().is_prefix_exp()
+        	&& elements[1].i().is_name() 
+        	&& elements[1].i().is_args() {
+        		return true;
+        	}
+        }
+
+        false
+	}
+
+	pub fn is_args(&self) -> bool {
+		//! [ ] `(´ [explist] `)´ 
+		//! [ ] tableconstructor
+		//! [ ] String 
+
+		if self.is_string() { return true; }
+		if self.is_table_constructor() { return true; }
+
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() == 2 {
+        	if identifiers[0] == Token::LeftParen
+        	&& identifiers[1] == Token::RightParen {
+        		// makes sure the elements (if len == 1) 
+        		// is a explist
+        		if elements.len() == 0 { return true; }
+        		else if elements.len() == 1 { return elements[0].i().is_exp_list(); }
+        	}	
+        }
+
+        false
+	}
+
+	pub fn is_function(&self) -> bool {
+		//! [x] function funcbody
+		
+		let Element { ref identifiers, ref elements } = self;
+
+		if identifiers.len() == 1 && elements.len() == 1 {
+			if identifiers[0] == Token::Function
+			&& elements[0].i().is_func_body() {
+				return true;
+			}
+		}
+
+		false
+	}
+
+	pub fn is_func_body(&self) -> bool {
+		//! [x] `(´ [parlist] `)´ block end
+		
+		let Element { ref identifiers, ref elements } = self;
+
+		if identifiers.len() == 3 && elements.len() == 1 {
+			if identifiers[0] == Token::LeftParen
+			&& identifiers[1] == Token::RightParen
+			&& identifiers[2] == Token::End
+			&& elements[0].i().is_block() {
+				return true;
+			}
+		}
+
+		if identifiers.len() == 3 && elements.len() == 2 {
+			if identifiers[0] == Token::LeftParen
+			&& identifiers[1] == Token::RightParen
+			&& identifiers[2] == Token::End
+			&& elements[0].i().is_par_list() 
+			&& elements[1].i().is_block() {
+				return true;
+			}
+		}
+
+		false
+	}
+
+	pub fn is_par_list(&self) -> bool {
+		//! [x] namelist [`,´ `...´]
+		//! [x] `...´
+
+        if let Some(token) = self.get_token() {
+        	match token.item() {
+        		Token::TriplePeriod => return true,
+        		_ => { },
+        	}
+        }
+
+        if self.is_name_list() { return true; }
+
+		let Element { ref identifiers, ref elements } = self;
+
+		if identifiers.len() == 0 && elements.len() == 2 {
+			if elements[0].i().is_name_list() {
+				if let Some(token) = elements[1].i().get_token() {
+					if token.i() == Token::TriplePeriod { return true; }
+				}
+			}
+		}
+
+		false
+	}
+
+	pub fn is_table_constructor(&self) -> bool {
+		//! [x] `{´ [fieldlist] `}´
+
+		let Element { ref identifiers, ref elements } = self;
+		
+		if identifiers.len() == 2 && elements.len() == 0 {
+			if identifiers[0] == Token::LeftMoustache
+			&& identifiers[1] == Token::RightMoustache {
+				return true;
+			}
+		} 
+
+		if identifiers.len() == 2 && elements.len() == 1 {
+			if identifiers[0] == Token::LeftMoustache
+			&& identifiers[1] == Token::RightMoustache 
+			&& elements[0].i().is_field_list() {
+				return true;
+			}
+		} 
+
+		false
+	}
+
+	pub fn is_field_list(&self) -> bool {
+
+		if self.is_field() { return true; }
+
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() == 0 && elements.len() > 0 {
+        	for i in 0 .. elements.len() {
+        		if !elements[i].i().is_field() { return false; }
+        	}
+        	return true;
+        }
+
+        false
+	}
+
+	pub fn is_field(&self) -> bool {
+		//! [x] `[´ exp `]´ `=´ exp
+		//! [x] Name `=´ exp
+		//! [x] exp
+
+		if self.is_exp() { return true; }
+
+        let Element { ref identifiers, ref elements } = self;
+
+        if identifiers.len() == 1 && elements.len() == 2 {
+			if identifiers[0] == Token::Equal 
+			&& elements[0].i().is_name()
+			&& elements[1].i().is_exp() {
+				return true;
+			}
+        }
+
+        if identifiers.len() == 3 && elements.len() == 2 {
+			if identifiers[0] == Token::LeftBracket 
+			&& identifiers[1] == Token::RightBracket 
+			&& identifiers[2] == Token::Equal 
+			&& elements[0].i().is_exp()
+			&& elements[1].i().is_exp() {
+				return true;
+			}
+        }
+
+		false
 	}
 
 	pub fn is_token(&self) -> bool {
@@ -239,6 +717,16 @@ impl Element {
 			return token.item().is_binop();
 		}
 		false
+	}
+
+	pub fn is_string(&self) -> bool {
+		if let Some(token) = self.get_token() {
+			match token.i() {
+				Token::String(_) | Token::MultiLineString(_) => return true,
+				_ => { }
+			}
+		}
+		false		
 	}
 
 	// PRIVATE FUNCTIONS
