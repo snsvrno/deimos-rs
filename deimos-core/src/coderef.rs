@@ -70,3 +70,12 @@ impl<T> PartialEq<T> for CodeRef<T> where T : PartialEq {
         self.item() == other
     }
 }
+
+impl<T> PartialEq<&T> for CodeRef<T> where T : PartialEq {
+    // implemented so i can directly compare a wrapped item
+    // with a raw item
+
+    fn eq(&self, other: &&T) -> bool {
+        &self.item() == other
+    }
+}

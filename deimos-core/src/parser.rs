@@ -100,6 +100,7 @@ impl<'a> Parser<'a> {
                         // stat ::=  local namelist [`=´ explist] 
 
                         // laststat ::= return [explist] | break
+                        if Parser::last_statement(&mut statement)? { continue; }
                         
                         // funcname ::= Name {`.´ Name} [`:´ Name]
 
@@ -110,6 +111,7 @@ impl<'a> Parser<'a> {
                         // namelist ::= Name {`,´ Name}
 
                         // explist ::= {exp `,´} exp
+                        if Parser::exp_list(&mut statement)? { continue; }
 
                         // exp ::=  nil | false | true | Number | String | `...´ | function | prefixexp | tableconstructor | 
                         
@@ -117,6 +119,7 @@ impl<'a> Parser<'a> {
                         if Parser::check_for_binop(&mut statement)? { continue; }
 
                         // exp ::=  unop exp
+                        if Parser::check_for_unop(&mut statement)? { continue; }
 
                         // prefixexp ::= var | functioncall | `(´ exp `)´
 
@@ -236,6 +239,79 @@ impl<'a> Parser<'a> {
 
     // checking functions
     
+    fn exp_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! [ ] {exp `,´} exp
+
+        // we need to start at every position and keep going until we hit 
+        // something that doesn't fit the pattern anymore
+        for i in 0 .. elements.len() {
+            // the big loop, this is the starting character
+
+            // if the first element isn't an expression we should just go
+            // to the next iteration of the big loop
+            if !elements[i].i().is_exp() { continue; }
+
+            let mut ending : usize = i; 
+
+            for j in i+1 .. elements.len() {
+                // this is the little loop, `i` is always the first character
+                // or the start of the element phrase.  
+
+                if (j-1) % 2 == 1 {
+                    // this should be the alternated tokens, so in ourcase
+                    // these should be commas
+                    if let Some(token) = elements[j].i().get_token() {
+                        if token != &Token::Comma { break; }
+                    } else { break; /* this doesn't fit the pattern, we should leave */ }
+                } else {
+                    // this should be an expression
+                    if !elements[j].i().is_exp() { break; }
+                }
+
+                // move the ending because it matches.
+                ending = j;
+            }
+
+            // now we check if we got anything useful.
+            if i != ending && (ending-i) % 2 == 0 {
+                // we are checking that (1) they are not the same, and the difference
+                // is even => a,b,c should be 0,4 which is even. you can't end an exp
+                // list with a , so there should always be 5 tokens, which makes a dif
+                // of 4
+
+                let mut exps : Vec<CodeElement> = Vec::new();
+
+                for cc in 0 .. (ending-i+1) {
+                    // we will iterate and remove all the components, and add the exp
+                    // to the vec<>
+ 
+                    let token = elements.remove(i);
+                    if cc % 2 == 0 {
+                        exps.push(token);
+                    }
+                }
+
+                if exps.len() == 0 {
+                    return Err(ParserError::general("expression list was found, but parsed as empty??"));
+                }
+
+                let code_start : usize = exps[0].code_start();
+                let line_number : usize = exps[0].line_number();
+                let code_end : usize = exps[exps.len()-1].code_end();
+
+                let item = Element::create(vec![], exps)?;
+
+                elements.insert(i, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     fn check_for_binop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
         if statement.len() >= 3 { for i in 0 .. statement.len() - 2 {
             // checks the standard format of `EXP (binop) EXP`
@@ -254,6 +330,29 @@ impl<'a> Parser<'a> {
 
                 statement.insert(i, CodeRef { item, code_end, code_start, line_number });
 
+                return Ok(true);
+            }
+        }}
+
+        Ok(false)
+    }
+
+    fn check_for_unop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        if statement.len() >= 2 { for i in 0 .. statement.len() - 1 {
+            // checks for the `(unop) EXP` format
+
+            if statement[i].i().is_unop_token() && statement[i+1].i().is_exp() {
+                let op = statement.remove(i);
+                let exp = statement.remove(i);
+
+                let code_start = op.code_start();
+                let line_number = op.line_number();
+                let code_end = exp.code_end();
+
+                let item = Element::create(vec![op], vec![exp])?;
+
+                statement.insert(i, CodeRef { item, code_end, code_start, line_number });
+                println!("did it");
                 return Ok(true);
             }
         }}
@@ -295,6 +394,60 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn last_statement(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! - return [explist]
+        //! - break
+
+        // first checks if we have the single token versions of these things
+        // this needs to start the section of elements, so we are going with that.
+        if elements.len() == 1 {
+            if let Some(token) = elements[0].i().get_token() {
+                if token == &Token::Break || token == &Token::Return {
+
+                    let removed_token = elements.remove(0);
+
+                    let code_start = removed_token.code_start();
+                    let code_end = removed_token.code_end();
+                    let line_number = removed_token.line_number();
+
+                    let item = Element::create(vec![removed_token], vec![])?;
+
+                    elements.insert(0, CodeRef{
+                        item, code_start, code_end, line_number
+                    });
+
+                    return Ok(true)
+                }
+            }
+        }
+
+        // now we check for the return were we can return an expression
+        if elements.len() == 2 {
+            if let Some(token) = elements[0].i().get_token() {
+                if token == &Token::Return && elements[1].i().is_exp_list() {
+                    let return_token = elements.remove(0);
+                    let exp_list = elements.remove(0);
+
+                    let code_start = return_token.code_start();
+                    let code_end = exp_list.code_end();
+                    let line_number = return_token.line_number();
+
+                    let item = Element::create(vec![return_token], vec![exp_list])?;
+
+                    elements.insert(0, CodeRef{
+                        item, code_start, code_end, line_number
+                    });
+
+                    return Ok(true)
+
+
+                }
+            }
+        }
+
+        Ok(false)
+    }
+
 }
 
 #[cfg(test)]
@@ -307,7 +460,8 @@ mod tests {
         use crate::parser::Parser;
 
         let code : &str = r#"
-        x = 1 + 2
+        x = 1 + - 2
+        return 2,3
         "#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua")).unwrap();
