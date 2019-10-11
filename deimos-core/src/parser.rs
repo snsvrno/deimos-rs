@@ -105,10 +105,12 @@ impl<'a> Parser<'a> {
                         // funcname ::= Name {`.´ Name} [`:´ Name]
 
                         // varlist ::= var {`,´ var}
+                        if Parser::var_list(&mut statement)? { continue; }
 
                         // var ::=  Name | prefixexp `[´ exp `]´ | prefixexp `.´ Name 
 
                         // namelist ::= Name {`,´ Name}
+                        if Parser::name_list(&mut statement)? { continue; }
 
                         // explist ::= {exp `,´} exp
                         if Parser::exp_list(&mut statement)? { continue; }
@@ -257,7 +259,7 @@ impl<'a> Parser<'a> {
                 // this is the little loop, `i` is always the first character
                 // or the start of the element phrase.  
 
-                if (j-1) % 2 == 1 {
+                if (j-i) % 2 == 1 {
                     // this should be the alternated tokens, so in ourcase
                     // these should be commas
                     if let Some(token) = elements[j].i().get_token() {
@@ -311,6 +313,153 @@ impl<'a> Parser<'a> {
 
         Ok(false)
     }
+
+    fn var_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! [ ] {var `,´} var
+
+        // we need to start at every position and keep going until we hit 
+        // something that doesn't fit the pattern anymore
+        for i in 0 .. elements.len() {
+            // the big loop, this is the starting character
+            println!("{} => {}",elements[i],elements[i].i().is_var());
+            // if the first element isn't an expression we should just go
+            // to the next iteration of the big loop
+            if !elements[i].i().is_var() { continue; }
+
+            let mut ending : usize = i; 
+
+            for j in i+1 .. elements.len() {
+                // this is the little loop, `i` is always the first character
+                // or the start of the element phrase.  
+
+                if (j-i) % 2 == 1 {
+                    // this should be the alternated tokens, so in ourcase
+                    // these should be commas
+                    if let Some(token) = elements[j].i().get_token() {
+                        if token != &Token::Comma { break; }
+                    } else { break; /* this doesn't fit the pattern, we should leave */ }
+                } else {
+                    // this should be an expression
+                    if !elements[j].i().is_var() { break; }
+                }
+
+                // move the ending because it matches.
+                ending = j;
+            }
+            // now we check if we got anything useful.
+            if i != ending && (ending-i) % 2 == 0 {
+                // we are checking that (1) they are not the same, and the difference
+                // is even => a,b,c should be 0,4 which is even. you can't end an exp
+                // list with a , so there should always be 5 tokens, which makes a dif
+                // of 4
+
+                let mut exps : Vec<CodeElement> = Vec::new();
+
+                for cc in 0 .. (ending-i+1) {
+                    // we will iterate and remove all the components, and add the exp
+                    // to the vec<>
+ 
+                    let token = elements.remove(i);
+                    if cc % 2 == 0 {
+                        exps.push(token);
+                    }
+                }
+
+                if exps.len() == 0 {
+                    return Err(ParserError::general("expression list was found, but parsed as empty??"));
+                }
+
+                let code_start : usize = exps[0].code_start();
+                let line_number : usize = exps[0].line_number();
+                let code_end : usize = exps[exps.len()-1].code_end();
+
+                let item = Element::create(vec![], exps)?;
+
+                elements.insert(i, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+
+    fn name_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! [ ] {exp `,´} exp
+
+        // we need to start at every position and keep going until we hit 
+        // something that doesn't fit the pattern anymore
+        for i in 0 .. elements.len() {
+            // the big loop, this is the starting character
+
+            // if the first element isn't an expression we should just go
+            // to the next iteration of the big loop
+            if !elements[i].i().is_name() { continue; }
+
+            let mut ending : usize = i; 
+
+            for j in i+1 .. elements.len() {
+                // this is the little loop, `i` is always the first character
+                // or the start of the element phrase.  
+
+                if (j-i) % 2 == 1 {
+                    // this should be the alternated tokens, so in ourcase
+                    // these should be commas
+                    if let Some(token) = elements[j].i().get_token() {
+                        if token != &Token::Comma { break; }
+                    } else { break; /* this doesn't fit the pattern, we should leave */ }
+                } else {
+                    // this should be an expression
+                    if !elements[j].i().is_name() { break; }
+                }
+
+                // move the ending because it matches.
+                ending = j;
+            }
+
+            // now we check if we got anything useful.
+            if i != ending && (ending-i) % 2 == 0 {
+                // we are checking that (1) they are not the same, and the difference
+                // is even => a,b,c should be 0,4 which is even. you can't end an exp
+                // list with a , so there should always be 5 tokens, which makes a dif
+                // of 4
+
+                let mut exps : Vec<CodeElement> = Vec::new();
+
+                for cc in 0 .. (ending-i+1) {
+                    // we will iterate and remove all the components, and add the exp
+                    // to the vec<>
+ 
+                    let token = elements.remove(i);
+                    if cc % 2 == 0 {
+                        exps.push(token);
+                    }
+                }
+
+                if exps.len() == 0 {
+                    return Err(ParserError::general("expression list was found, but parsed as empty??"));
+                }
+
+                let code_start : usize = exps[0].code_start();
+                let line_number : usize = exps[0].line_number();
+                let code_end : usize = exps[exps.len()-1].code_end();
+
+                let item = Element::create(vec![], exps)?;
+
+                elements.insert(i, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
 
     fn check_for_binop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
         if statement.len() >= 3 { for i in 0 .. statement.len() - 2 {
@@ -461,6 +610,7 @@ mod tests {
 
         let code : &str = r#"
         x = 1 + - 2
+        x,y = 2,3
         return 2,3
         "#;
 
