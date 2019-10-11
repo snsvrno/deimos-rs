@@ -86,10 +86,11 @@ impl<'a> Parser<'a> {
                             println!("{}:{}:{}",s,s.code_start(), s.code_end());
                         }
 
+                        if Parser::process_comment(&mut statement)? { continue; }
+
                         // stat ::=  varlist `=´ explist | 
                         if Parser::process_statement_assignment(&mut statement)? { continue; }
                         
-                        // stat ::=  functioncall | 
                         // stat ::=  do block end | 
                         // stat ::=  while exp do block end | 
                         // stat ::=  repeat block until exp | 
@@ -98,7 +99,9 @@ impl<'a> Parser<'a> {
                         // stat ::=  for namelist in explist do block end | 
                         // stat ::=  function funcname funcbody | 
                         // stat ::=  local function Name funcbody | 
+                        
                         // stat ::=  local namelist [`=´ explist] 
+                        if Parser::process_statement_local_assignment(&mut statement)? { continue; }
 
                         // laststat ::= return [explist] | break
                         if Parser::process_last_statement(&mut statement)? { continue; }
@@ -108,21 +111,20 @@ impl<'a> Parser<'a> {
                         // varlist ::= var {`,´ var}
                         if Parser::process_var_list(&mut statement)? { continue; }
 
-                        // var ::=  Name | prefixexp `[´ exp `]´ | prefixexp `.´ Name 
+                        // var ::=  prefixexp `[´ exp `]´ | prefixexp `.´ Name 
+                        if Parser::process_var(&mut statement)? { continue; }
 
                         // namelist ::= Name {`,´ Name}
                         if Parser::process_name_list(&mut statement)? { continue; }
 
-                        // explist ::= {exp `,´} exp
-                        if Parser::process_exp_list(&mut statement)? { continue; }
-
-                        // exp ::=  nil | false | true | Number | String | `...´ | function | prefixexp | tableconstructor | 
-                        
                         // exp ::=  exp binop exp
                         if Parser::process_binop(&mut statement)? { continue; }
 
                         // exp ::=  unop exp
                         if Parser::process_unop(&mut statement)? { continue; }
+
+                        // explist ::= {exp `,´} exp
+                        if Parser::process_exp_list(&mut statement)? { continue; }
 
                         // prefixexp ::= `(´ exp `)´
                         if Parser::process_prefix_exp(&mut statement)? { continue; }
@@ -140,12 +142,6 @@ impl<'a> Parser<'a> {
                         */
                         // tableconstructor ::= `{´ [fieldlist] `}´
                         if self.process_table_constructor(&mut statement)? { continue; }
-
-                        // fieldlist ::= field {fieldsep field} [fieldsep]
-                        // if self.process_field_list(&mut statement)? { continue; }
-
-                        // `[´ exp `]´ `=´ exp | Name `=´ exp
-                        if Parser::process_field(&mut statement)? { continue; }
 
                         break;
                     }
@@ -309,6 +305,31 @@ impl<'a> Parser<'a> {
     }
 
     // checking functions
+    fn process_comment(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        if elements.len() >= 2 {
+            if elements[0].i().matches_token(Token::Minus)
+            && elements[0].i().matches_token(Token::Minus) {
+
+                let minus1 = elements.remove(0);
+                let minus2 = elements.remove(1);
+
+                let code_start : usize = minus1.code_start();
+                let line_number : usize = minus1.line_number();
+                let code_end : usize = elements[elements.len()-1].code_end();
+
+                let item = Element::create(vec![minus1, minus2], elements.drain(..).collect())?;
+
+                elements.insert(0, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
     
     fn process_exp_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! [ ] {exp `,´} exp
@@ -379,6 +400,63 @@ impl<'a> Parser<'a> {
                 return Ok(true);
             }
         }
+
+        Ok(false)
+    }
+
+    fn process_var(elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+        //! - prefixexp `[´ exp `]´
+        //! - prefixexp `.´ Name 
+
+        // checks `prefix.name`
+        if elements.len() >= 3 { for i in 0 .. elements.len() - 2 {
+            if elements[i].i().is_prefix_exp()
+            && elements[i+1].i().matches_token(Token::Period)
+            && elements[i+2].i().is_name() {
+
+                let prefix = elements.remove(i);
+                let period = elements.remove(i);
+                let name = elements.remove(i);
+
+                let code_start : usize = prefix.code_start();
+                let line_number : usize = prefix.line_number();
+                let code_end : usize = name.code_end();
+
+                let item = Element::create(vec![period], vec![prefix, name])?;
+
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+        // checks `prefix[exp]`
+        if elements.len() >= 4 { for i in 0 .. elements.len() - 3 {
+            if elements[i].i().is_prefix_exp()
+            && elements[i+1].i().matches_token(Token::LeftBracket)
+            && elements[i+2].i().is_exp() 
+            && elements[i+3].i().matches_token(Token::RightBracket) {
+
+                let prefix = elements.remove(i);
+                let left = elements.remove(i);
+                let exp = elements.remove(i);
+                let right = elements.remove(i);
+
+                let code_start : usize = prefix.code_start();
+                let line_number : usize = prefix.line_number();
+                let code_end : usize = right.code_end();
+
+                let item = Element::create(vec![left, right], vec![prefix, exp])?;
+
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
 
         Ok(false)
     }
@@ -641,6 +719,59 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn process_statement_local_assignment(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! local namelist [`=´ explist] 
+
+        // checks for blank assignment
+        if elements.len() == 2 {
+            if elements[0].i().matches_token(Token::Local)
+            && elements[1].i().is_name_list() {
+                let local = elements.remove(0);
+                let name_list = elements.remove(0);
+
+                let code_start = local.code_start();
+                let code_end = name_list.code_end();
+                let line_number = local.line_number();
+
+                let item = Element::create(vec![local], vec![name_list])?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        // checks for real assignment
+        if elements.len() == 4 {
+            if elements[0].i().matches_token(Token::Local)
+            && elements[1].i().is_name_list() 
+            && elements[2].i().matches_token(Token::Equal) 
+            && elements[3].i().is_exp_list() {
+
+                let local = elements.remove(0);
+                let name_list = elements.remove(0);
+                let eq = elements.remove(0);
+                let exp_list = elements.remove(0);
+
+                let code_start = local.code_start();
+                let code_end = exp_list.code_end();
+                let line_number = local.line_number();
+
+                let item = Element::create(vec![local,eq], vec![name_list,exp_list])?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     fn process_last_statement(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! - return [explist]
         //! - break
@@ -885,9 +1016,14 @@ mod tests {
         use crate::parser::Parser;
 
         let code : &str = r#"
+        -- comment here
         x = 1 + - 2
         x,y = 2,3
         tabletest = { a = 1; b = 2; c = 3, ["return"] = 4; }
+        bob[x] = 4
+        jim = 3 + bob.x
+        local bob,jim,mary = 1,2+3,(4*5)
+        local bob
         return (2 + 3)
         "#;
 

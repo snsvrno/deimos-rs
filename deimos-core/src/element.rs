@@ -157,6 +157,7 @@ impl Element {
         }
 
         if self.is_function_call() { return true; }
+        if self.is_comment() { return true; } // not really a statement, but i want to keep this in the code.
 
         // do block end  
         if identifiers.len() == 2 && elements.len() == 1 {
@@ -248,14 +249,22 @@ impl Element {
 			}
         }
 
-        // local namelist [`=´ explist]
+        // local namelist `=´ explist
         if identifiers.len() == 2 && elements.len() == 2 {
-        	if identifiers[0] == Token::Local
-			&& identifiers[1] == Token::Equal
-			&& elements[0].i().is_name_list()
-			&& elements[1].i().is_exp_list() {
-				return true;
-			}
+            if identifiers[0] == Token::Local
+            && identifiers[1] == Token::Equal
+            && elements[0].i().is_name_list()
+            && elements[1].i().is_exp_list() {
+                return true;
+            }
+        }
+
+        // local namelist
+        if identifiers.len() == 1 && elements.len() == 1 {
+            if identifiers[0] == Token::Local
+            && elements[0].i().is_name_list() {
+                return true;
+            }
         }
 
         false
@@ -599,6 +608,19 @@ impl Element {
 
 		false
 	}
+
+    pub fn is_comment(&self) -> bool {
+        //! - -- something here
+
+        if let Some(token) = self.get_token() {
+            match token.item() {
+                Token::Comment(_) => return true,
+                _ => { },
+            }
+        }
+
+        false
+    }
 
 	pub fn is_table_constructor(&self) -> bool {
 		//! [x] `{´ [fieldlist] `}´
