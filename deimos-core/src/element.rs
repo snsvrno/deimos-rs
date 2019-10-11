@@ -684,6 +684,16 @@ impl Element {
         }
 	}
 
+    pub fn matches_token(&self, token : Token) -> bool {
+        //! used to check if this object is a token of type `token`
+
+        if let Some(inside_token) = self.get_token() {
+            return inside_token == &token; 
+        }
+
+        false
+    }
+
 	pub fn get_token<'a>(&'a self) -> Option<&'a CodeToken> {
 		//! checks if this item is a token and then returns that
 		//! token

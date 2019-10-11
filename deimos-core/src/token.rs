@@ -100,6 +100,17 @@ impl Token {
         }
     }
 
+    pub fn matching_set(&self) -> Vec<Token> {
+        //! returns the token(s) that are used when nesting, so if 
+        //! you did this on `{` it will return `}` 
+
+        match self {
+            Token::LeftMoustache => vec![Token::RightMoustache],
+            Token::RightMoustache => vec![Token::LeftMoustache],
+            _ => unimplemented!(),
+        }
+    } 
+
     pub fn is_eol(char : &str) -> bool {
         //! checks if the string is an end of line character
         

@@ -30,6 +30,7 @@ impl<'a> std::default::Default for Parser<'a> {
             blocks : None,
 
             tokens : Vec::new(),
+
         }
     }
 }
@@ -86,7 +87,7 @@ impl<'a> Parser<'a> {
                         }
 
                         // stat ::=  varlist `=´ explist | 
-                        if Parser::statement_assignment(&mut statement)? { continue; }
+                        if Parser::process_statement_assignment(&mut statement)? { continue; }
                         
                         // stat ::=  functioncall | 
                         // stat ::=  do block end | 
@@ -100,30 +101,31 @@ impl<'a> Parser<'a> {
                         // stat ::=  local namelist [`=´ explist] 
 
                         // laststat ::= return [explist] | break
-                        if Parser::last_statement(&mut statement)? { continue; }
+                        if Parser::process_last_statement(&mut statement)? { continue; }
                         
                         // funcname ::= Name {`.´ Name} [`:´ Name]
 
                         // varlist ::= var {`,´ var}
-                        if Parser::var_list(&mut statement)? { continue; }
+                        if Parser::process_var_list(&mut statement)? { continue; }
 
                         // var ::=  Name | prefixexp `[´ exp `]´ | prefixexp `.´ Name 
 
                         // namelist ::= Name {`,´ Name}
-                        if Parser::name_list(&mut statement)? { continue; }
+                        if Parser::process_name_list(&mut statement)? { continue; }
 
                         // explist ::= {exp `,´} exp
-                        if Parser::exp_list(&mut statement)? { continue; }
+                        if Parser::process_exp_list(&mut statement)? { continue; }
 
                         // exp ::=  nil | false | true | Number | String | `...´ | function | prefixexp | tableconstructor | 
                         
                         // exp ::=  exp binop exp
-                        if Parser::check_for_binop(&mut statement)? { continue; }
+                        if Parser::process_binop(&mut statement)? { continue; }
 
                         // exp ::=  unop exp
-                        if Parser::check_for_unop(&mut statement)? { continue; }
+                        if Parser::process_unop(&mut statement)? { continue; }
 
-                        // prefixexp ::= var | functioncall | `(´ exp `)´
+                        // prefixexp ::= `(´ exp `)´
+                        if Parser::process_prefix_exp(&mut statement)? { continue; }
 
                         // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
                         /*
@@ -135,10 +137,15 @@ impl<'a> Parser<'a> {
 
                         parlist ::= namelist [`,´ `...´] | `...´
 
-                        tableconstructor ::= `{´ [fieldlist] `}´
-
-                        fieldlist ::= field {fieldsep field} [fieldsep]
                         */
+                        // tableconstructor ::= `{´ [fieldlist] `}´
+                        if self.process_table_constructor(&mut statement)? { continue; }
+
+                        // fieldlist ::= field {fieldsep field} [fieldsep]
+                        // if self.process_field_list(&mut statement)? { continue; }
+
+                        // `[´ exp `]´ `=´ exp | Name `=´ exp
+                        if Parser::process_field(&mut statement)? { continue; }
 
                         break;
                     }
@@ -239,9 +246,71 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn get_tokens_until_token(&mut self, elements : &mut Vec<CodeElement>, token : Token, nesting : bool) -> Result<(),Error> {
+        //! will return all the tokens (including semicolons) until it finds the supplied token.
+        //! if nesting then it will make sure to count open and closed tokens
+
+        // we are going to assume that we should be adding a semicolon at the end of this.
+        // this will revent errors moving forward (probably). we will cheat because we don't
+        // have the metadata for this thing, so we will attempt to remake it.
+        {
+            let code_start = elements[elements.len()-1].code_end();
+            let line_number = elements[elements.len()-1].line_number();
+            let code_end = code_start + 1;
+
+            elements.push(Element::codeelement_from_token(CodeRef{
+                item : Token::SemiColon,
+                code_start, code_end, line_number
+            }));
+        }
+
+        let mut nest_level : usize = 1;
+
+        loop {
+            // makes sure we still have tokens left to loop through.
+            if self.tokens.len() == 0 { 
+                return Err(ParserError::general(&format!("ran out of tokens in the stream, looking for '{}' but never found it?",token)));
+            }
+
+            let popped_token = self.tokens.remove(0);
+
+            // stores the result of the final done check.
+            let done = {
+                if nesting {
+                    // checks the nesting tokens
+                    if popped_token == token {
+                        nest_level -= 1;
+                    } else {
+                        for other_token in token.matching_set() {
+                            if popped_token == other_token {
+                                nest_level += 1;
+                            }
+                        }
+                    }
+
+                    nest_level == 0
+                } else {
+                    // if we are not nesting all we care about is if 
+                    // we find the token.
+                    popped_token == token
+                }
+            };
+
+            if popped_token != Token::WhiteSpace {
+                elements.push(Element::codeelement_from_token(popped_token));
+            }
+
+            // finally checks if we are done.
+            if done { break; }
+
+        }
+
+        Ok(())
+    }
+
     // checking functions
     
-    fn exp_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_exp_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! [ ] {exp `,´} exp
 
         // we need to start at every position and keep going until we hit 
@@ -314,14 +383,14 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn var_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_var_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! [ ] {var `,´} var
 
         // we need to start at every position and keep going until we hit 
         // something that doesn't fit the pattern anymore
         for i in 0 .. elements.len() {
             // the big loop, this is the starting character
-            println!("{} => {}",elements[i],elements[i].i().is_var());
+
             // if the first element isn't an expression we should just go
             // to the next iteration of the big loop
             if !elements[i].i().is_var() { continue; }
@@ -387,7 +456,7 @@ impl<'a> Parser<'a> {
     }
 
 
-    fn name_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_name_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! [ ] {exp `,´} exp
 
         // we need to start at every position and keep going until we hit 
@@ -460,8 +529,37 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn process_prefix_exp(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! prefixexp ::= `(´ exp `)´
 
-    fn check_for_binop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        if statement.len() >= 3 { for i in 0 .. statement.len() - 2 {
+
+            if statement[i].i().matches_token(Token::LeftParen) 
+            && statement[i+1].i().is_exp() 
+            && statement[i+2].i().matches_token(Token::RightParen) {
+
+                let left = statement.remove(i);
+                let exp = statement.remove(i);
+                let right = statement.remove(i);
+
+                let code_start : usize = left.code_start();
+                let line_number : usize = left.line_number();
+                let code_end : usize = right.code_end();
+
+                let item = Element::create(vec![left,right],vec![exp])?;
+
+                statement.insert(i,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+        Ok(false)
+    }
+
+    fn process_binop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
         if statement.len() >= 3 { for i in 0 .. statement.len() - 2 {
             // checks the standard format of `EXP (binop) EXP`
 
@@ -486,7 +584,7 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn check_for_unop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_unop(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
         if statement.len() >= 2 { for i in 0 .. statement.len() - 1 {
             // checks for the `(unop) EXP` format
 
@@ -509,7 +607,7 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn statement_assignment(statement: &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_statement_assignment(statement: &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! varlist `=´ explist
 
         if statement.len() == 3 {
@@ -543,7 +641,7 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn last_statement(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_last_statement(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! - return [explist]
         //! - break
 
@@ -597,6 +695,184 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn process_table_constructor(&mut self, elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+
+        //! tableconstructor ::= `{´ [fieldlist] `}´
+
+        // first we check for the `{`, if we find that we see if we have a `}`, if not
+        // then we ask for all the tokens until the `}`. **we need to worry about nesting**
+        for i in 0 .. elements.len() {
+            if elements[i].i().matches_token(Token::LeftMoustache) {
+                self.get_tokens_until_token(elements, Token::RightMoustache, true)?;
+
+                // now we process the insides, we need to make sure
+                // to check for fields first, before we go for a field list.
+                loop { if Parser::process_field(elements)? { continue; } break; }
+                Parser::process_field_list(elements)?;
+
+                // after this we should get one object, if not then we messed
+                // something up somewhere
+
+                if elements.len() - i != 3 {
+                    // we are counting `{` `fieldlist` `}` so that is 3
+                    return Err(ParserError::general("error processing table constructor, errr!"));
+                }
+
+                let left = elements.remove(i);
+                let fields = elements.remove(i);
+                let right = elements.remove(elements.len()-1);
+
+                let code_start = left.code_start();
+                let code_end = right.code_end();
+                let line_number = left.line_number();
+
+                let item = Element::create(vec![left, right], vec![fields])?;
+
+                elements.insert(i, CodeRef {
+                    item, code_end, code_start, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+    
+    fn process_field_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! [ ] {exp `,´} exp
+
+        // we need to start at every position and keep going until we hit 
+        // something that doesn't fit the pattern anymore
+        for i in 0 .. elements.len() {
+            // the big loop, this is the starting character
+
+            // if the first element isn't an expression we should just go
+            // to the next iteration of the big loop
+            if !elements[i].i().is_field() { continue; }
+
+            let mut ending : usize = i; 
+
+            for j in i+1 .. elements.len() {
+                // this is the little loop, `i` is always the first character
+                // or the start of the element phrase.  
+
+                if (j-i) % 2 == 1 {
+                    // this should be the alternated tokens, so in ourcase
+                    // these should be commas or semicolon.
+                    if let Some(token) = elements[j].i().get_token() {
+                        if token != &Token::Comma && token != &Token::SemiColon { break; }
+                    } else { break; /* this doesn't fit the pattern, we should leave */ }
+                } else {
+                    // this should be an expression
+                    if !elements[j].i().is_field() { break; }
+                }
+
+                // move the ending because it matches.
+                ending = j;
+            }
+
+            // now we check if we got anything useful.
+            if i != ending {
+                // we are checking that they are not the same, for other lists
+                // we make sure the total number of items is odd, but this might
+                // not be the case here because you can end a field list with a 
+                // field list separator (, or ;)
+
+                let mut exps : Vec<CodeElement> = Vec::new();
+
+                for cc in 0 .. (ending-i+1) {
+                    // we will iterate and remove all the components, and add the exp
+                    // to the vec<>
+ 
+                    let token = elements.remove(i);
+                    if cc % 2 == 0 {
+                        exps.push(token);
+                    }
+                }
+
+                if exps.len() == 0 {
+                    return Err(ParserError::general("field list was found, but parsed as empty??"));
+                }
+
+                let code_start : usize = exps[0].code_start();
+                let line_number : usize = exps[0].line_number();
+                let code_end : usize = exps[exps.len()-1].code_end();
+
+                let item = Element::create(vec![], exps)?;
+
+                elements.insert(i, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
+    fn process_field(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+        //! - `[´ exp `]´ `=´ exp
+        //! - Name `=´ exp
+
+        // checking for `[exp] = exp` 
+        if elements.len() >= 5 { for i in 0 .. elements.len() - 4 {
+            if elements[i].i().matches_token(Token::LeftBracket)
+            && elements[i+1].i().is_exp()
+            && elements[i+2].i().matches_token(Token::RightBracket)
+            && elements[i+3].i().matches_token(Token::Equal)
+            && elements[i+4].i().is_exp() {
+
+                let left = elements.remove(i);
+                let exp1 = elements.remove(i);
+                let right = elements.remove(i);
+                let op = elements.remove(i);
+                let exp2 = elements.remove(i);
+
+                let code_start = left.code_start();
+                let code_end = exp2.code_end();
+                let line_number = left.line_number();
+
+                let item = Element::create(vec![left, right, op], vec![exp1, exp2])?;
+
+                elements.insert(i, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+
+        }}
+
+        // checking for `Name = exp`
+        if elements.len() >=3 { for i in 0 .. elements.len() - 2 {
+            if elements[i].i().is_name()
+            && elements[i+1].i().matches_token(Token::Equal)
+            && elements[i+2].i().is_exp() {
+
+                let name = elements.remove(i);
+                let op = elements.remove(i);
+                let exp = elements.remove(i);
+
+                let code_start = name.code_start();
+                let code_end = exp.code_end();
+                let line_number = name.line_number();
+
+                let item = Element::create(vec![op], vec![name, exp])?;
+
+                elements.insert(i, CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+
+        Ok(false)
+    }
+
 }
 
 #[cfg(test)]
@@ -611,7 +887,8 @@ mod tests {
         let code : &str = r#"
         x = 1 + - 2
         x,y = 2,3
-        return 2,3
+        tabletest = { a = 1; b = 2; c = 3, ["return"] = 4; }
+        return (2 + 3)
         "#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua")).unwrap();
