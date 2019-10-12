@@ -125,6 +125,8 @@ impl<'a> Parser<'a> {
             if Parser::process_statement_assignment(elements)? { continue; }
             
             // stat ::=  do block end | 
+            if self.process_statement_do_end(elements, token_pool)? { continue; }
+
             // stat ::=  while exp do block end | 
             // stat ::=  repeat block until exp | 
             // stat ::=  if exp then block {elseif exp then block} [else block] end | 
@@ -226,9 +228,117 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn get_tokens_until_token(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>, token : Token, nesting : bool) -> Result<(),Error> {
+    fn get_tokens_until_token(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>, token : Token) -> Result<(),Error> {
+    
+        let mut nesting_stack : Vec<Token> = Vec::new();
+        let original_length : usize = elements.len();
+        let mut cursor : usize = 0;
+        let mut added_semicolon = false;
+
+        loop {
+            // checks if we run out of runway
+            if cursor >= elements.len() { 
+                // first we check for the semicolon hack
+                if !added_semicolon {
+                    let code_start = elements[elements.len()-1].code_end();
+                    let line_number = elements[elements.len()-1].line_number();
+                    let code_end = code_start + 1;
+
+                    elements.push(Element::codeelement_from_token(CodeRef{
+                        item : Token::SemiColon,
+                        code_start, code_end, line_number
+                    }));
+
+                    added_semicolon = true;
+                }
+
+
+                if token_pool.len() > 0 {
+                    // if we ran out of space we should first see if we can
+                    // add another character from the pool
+                    let popd_token = token_pool.remove(0);
+                    
+                    if popd_token != Token::WhiteSpace {
+                        elements.push(Element::codeelement_from_token(popd_token)); 
+                    }
+                    
+                    continue;
+                } else {
+                    // if not we will error because we haven't found what we were 
+                    // looking for (assuming because we are here)
+                    return Err(ParserError::unterminated(&self, 
+                        elements[0].line_number(), elements[0].code_start(),
+                        elements[elements.len()-1].code_end(),&format!("can't find the '{}' to close the phrase",token))
+                    );
+                }
+            }
+
+            if let Some(element_token) = elements[cursor].i().get_token() {
+                // checks if we should be adding another nesting level
+                if let Some(ending) = element_token.i().matching_set() { nesting_stack.push(ending); }
+                // now checks if we ended a nest
+                else if nesting_stack.len() > 0 {
+                    if element_token == &nesting_stack[nesting_stack.len()-1] {
+                        // we remove that level
+                        nesting_stack.pop();
+                    }
+                }
+            }
+
+            // we increment it
+            cursor += 1;
+
+            // we are also checking against the original length, because we
+            // need to first capture the openning token, we might be too early
+            // in the phrase and there could be other tokens infront that would
+            // cause us to break before we want to.
+            if nesting_stack.len() == 0 && cursor > original_length { break; }
+        }
+
+        if let Some(last_token) = elements[elements.len()-1].i().get_token() {
+            if last_token != &token {
+                return Err(ParserError::unterminated(&self, 
+                    elements[0].line_number(), elements[0].code_start(),
+                    elements[elements.len()-1].code_end(),&format!("expected '{}' to close the phrase, but found '{}'",token, last_token))
+                );
+            }
+        } 
+
+        Ok(())    
+    }
+/*
+    fn get_tokens_until_token_2(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>, token : Token, starting_token : Option<Token>) -> Result<(),Error> {
         //! will return all the tokens (including semicolons) until it finds the supplied token.
         //! if nesting then it will make sure to count open and closed tokens
+
+        // we set the starting nest, if we are given a starting token that means we will
+        // be nesting, so we should start from zero. we start counting at the beginning of
+        // the element stream so we will count our starting token.
+        let mut nest_level : usize = if starting_token.is_some() { 0 } else { 1 };
+
+        // first we check the in element stream
+        for i in 0 .. elements.len() {
+            if let Some(element_token) = elements[i].i().get_token() {
+                // check if the token is the one we are looking for.
+                if element_token == &token { 
+                    if nest_level == 0 {
+                        // error here because we'll get a rust error (because we can't do 0-1 of usize)
+                        return Err(ParserError::unterminated(&self, 
+                            elements[0].line_number(), elements[0].code_start(),
+                            elements[0].code_end(),&format!("can't find the '{}' to close the phrase",token))
+                        );
+                    } 
+                    // decrement the level
+                    nest_level -= 1; 
+                } else if let Some(ref starting_token) = starting_token {
+                    // if we gave it a starting token lets count up
+                    if element_token == &starting_token { nest_level += 1; }
+                } 
+            }
+        }
+
+        // after we went through all that, lets see if we're ok
+        if nest_level == 0 { return Ok (()); }
 
         // we are going to assume that we should be adding a semicolon at the end of this.
         // this will revent errors moving forward (probably). we will cheat because we don't
@@ -244,27 +354,31 @@ impl<'a> Parser<'a> {
             }));
         }
 
-        let mut nest_level : usize = 1;
+        let mut nesting_stack : Vec<Token> = Vec::new();
 
         loop {
             // makes sure we still have tokens left to loop through.
             if token_pool.len() == 0 { 
-                return Err(ParserError::general(&format!("ran out of tokens in the stream, looking for '{}' but never found it?",token)));
+                return Err(ParserError::unterminated(&self, 
+                    elements[0].line_number(), elements[0].code_start(),
+                    elements[0].code_end(),&format!("can't find the '{}' to close the phrase",token))
+                );
             }
 
             let popped_token = token_pool.remove(0);
 
+            // we check against the starting 
+
+
             // stores the result of the final done check.
             let done = {
-                if nesting {
+                if let Some(ref starting_token) = starting_token {
                     // checks the nesting tokens
                     if popped_token == token {
                         nest_level -= 1;
                     } else {
-                        for other_token in token.matching_set() {
-                            if popped_token == other_token {
-                                nest_level += 1;
-                            }
+                        if popped_token == starting_token {
+                            nest_level += 1;
                         }
                     }
 
@@ -287,7 +401,7 @@ impl<'a> Parser<'a> {
 
         Ok(())
     }
-
+*/
     // checking functions
     fn process_comment(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         if elements.len() >= 2 {
@@ -755,6 +869,49 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn process_statement_do_end(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
+
+        // check that the first token is a do, can't be any other way. do has to start the statement
+
+        if elements.len() > 0 {
+            if elements[0].i().matches_token(Token::Do) {
+                self.get_tokens_until_token(elements, token_pool, Token::End)?;
+                
+                let insides : Vec<CodeToken> = {
+                    let mut tokens : Vec<CodeToken> = Vec::new();
+
+                    for token in elements.drain(1 .. elements.len() - 1) {
+                        if let Some(t) = token.unwrap().consume_to_token() {
+                            tokens.push(t);
+                        }
+                    }
+
+                    tokens
+                };
+                
+                let block = self.process(insides)?;
+
+                let do_token = elements.remove(0);
+                let end_token = elements.remove(0);
+
+                let code_start = do_token.code_start();
+                let code_end = end_token.code_end();
+                let line_number = do_token.line_number();
+
+                let item = Element::create(vec![do_token,end_token], vec![block])?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+
+        Ok(false)
+    }
+
     fn process_last_statement(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! - return [explist]
         //! - break
@@ -817,7 +974,7 @@ impl<'a> Parser<'a> {
         // then we ask for all the tokens until the `}`. **we need to worry about nesting**
         for i in 0 .. elements.len() {
             if elements[i].i().matches_token(Token::LeftMoustache) {
-                self.get_tokens_until_token(elements, token_pool, Token::RightMoustache, true)?;
+                self.get_tokens_until_token(elements, token_pool, Token::RightMoustache)?;
 
                 // we are going to pull out the insides for processing
                 let mut insides : Vec<CodeElement> = elements.drain(i+1 .. elements.len()-1).collect();
@@ -834,7 +991,6 @@ impl<'a> Parser<'a> {
                     ));
                 }
                 
-
                 let left = elements.remove(i);
                 let right = elements.remove(elements.len()-1);
 
@@ -1009,6 +1165,11 @@ mod tests {
         jim = 3 + bob.x
         local bob,jim,mary = 1,2+3,(4*5)
         local bob
+
+        do
+            x = 5
+        end
+
         return (2 + 3)
         "#;
 

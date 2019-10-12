@@ -16,6 +16,9 @@ pub enum ParserError {
 
     #[fail]
     EXPECT(CodeInfo),       // got something unexpected
+
+    #[fail]
+    UNTERMINATED(CodeInfo), // can't find the end of what i'm looking for
 }
 
 impl std::fmt::Display for ParserError {
@@ -28,6 +31,7 @@ impl std::fmt::Display for ParserError {
             ParserError::GEN(desc) => display_error_general(f, &desc),
             ParserError::NOSTATEMENT(info) => display_error(f, "Not a Statement", &info),
             ParserError::EXPECT(info) => display_error(f, "Unexpected Element", &info),
+            ParserError::UNTERMINATED(info) => display_error(f, "Unterminated Phrase", &info),
         }
     }
 }
@@ -54,6 +58,19 @@ impl ParserError {
     }
 
     pub fn unexpected(parser : &Parser, line : usize, start : usize, end : usize, description : &str) -> Error {
+        //! creates an 'cant reduce to statement' error
+
+        let mut code_info = CodeInformation::into_codeinfo(parser);
+
+        code_info.description = description.to_string();
+        code_info.span = end - start;
+        code_info.cursor_pos = start;
+        code_info.line_number = line;
+        
+        ParserError::NOSTATEMENT(code_info).into()
+    }
+
+    pub fn unterminated(parser : &Parser, line : usize, start : usize, end : usize, description : &str) -> Error {
         //! creates an 'cant reduce to statement' error
 
         let mut code_info = CodeInformation::into_codeinfo(parser);

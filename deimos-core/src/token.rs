@@ -100,14 +100,14 @@ impl Token {
         }
     }
 
-    pub fn matching_set(&self) -> Vec<Token> {
+    pub fn matching_set(&self) -> Option<Token> {
         //! returns the token(s) that are used when nesting, so if 
         //! you did this on `{` it will return `}` 
 
         match self {
-            Token::LeftMoustache => vec![Token::RightMoustache],
-            Token::RightMoustache => vec![Token::LeftMoustache],
-            _ => unimplemented!(),
+            Token::LeftMoustache => Some(Token::RightMoustache),
+            Token::Do => Some(Token::End),
+            _ => None,
         }
     } 
 
