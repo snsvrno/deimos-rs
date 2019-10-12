@@ -13,6 +13,9 @@ pub enum ParserError {
 
     #[fail]
     NOSTATEMENT(CodeInfo),      // can't reduce the thing into a statement
+
+    #[fail]
+    EXPECT(CodeInfo),       // got something unexpected
 }
 
 impl std::fmt::Display for ParserError {
@@ -24,6 +27,7 @@ impl std::fmt::Display for ParserError {
         match self {
             ParserError::GEN(desc) => display_error_general(f, &desc),
             ParserError::NOSTATEMENT(info) => display_error(f, "Not a Statement", &info),
+            ParserError::EXPECT(info) => display_error(f, "Unexpected Element", &info),
         }
     }
 }
@@ -42,6 +46,19 @@ impl ParserError {
         let mut code_info = CodeInformation::into_codeinfo(parser);
 
         code_info.description = String::from("can't reduce to a single statement");
+        code_info.span = end - start;
+        code_info.cursor_pos = start;
+        code_info.line_number = line;
+        
+        ParserError::NOSTATEMENT(code_info).into()
+    }
+
+    pub fn unexpected(parser : &Parser, line : usize, start : usize, end : usize, description : &str) -> Error {
+        //! creates an 'cant reduce to statement' error
+
+        let mut code_info = CodeInformation::into_codeinfo(parser);
+
+        code_info.description = description.to_string();
         code_info.span = end - start;
         code_info.cursor_pos = start;
         code_info.line_number = line;

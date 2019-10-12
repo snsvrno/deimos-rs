@@ -4,7 +4,7 @@ pub mod parser;
 
 const LEFT_PADDING : &str = "  ";
 const MARKER : &str = "^";
-const TERMINAL_WIDTH : usize = 70;
+const TERMINAL_WIDTH : usize = 120;
 
 pub fn display_error_general(f : &mut std::fmt::Formatter<'_>, description : &str) -> std::fmt::Result {
     //! a general error message, this doesn't show code, instead some general message 

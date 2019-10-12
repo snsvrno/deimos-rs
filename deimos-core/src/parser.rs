@@ -57,17 +57,7 @@ impl<'a> Parser<'a> {
                     // now we try and match that statement to something
                     // from the lua syntax
 
-                    self.parse(&mut statement, &mut tokens)?;
-
-                    // checks if we reduced it down to a single element, if so 
-                    // then we can add it to the working_phrase and move on.
-                    match statement.len() {
-                        1 => working_phrase.push(statement.remove(0)),
-                        0 => return Err(ParserError::general("parser found an empty statement?")),
-                        _ => return Err(ParserError::not_a_statement(&self,
-                            statement[0].line_number(), statement[0].code_start(),
-                            statement[statement.len()-1].code_end()))
-                    }
+                    working_phrase.push(self.parse(&mut statement, &mut tokens)?);
                 }
             }
         }
@@ -125,7 +115,7 @@ impl<'a> Parser<'a> {
         Ok(chunk)
     }
 
-    fn parse(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<(), Error> {
+    fn parse(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<CodeElement, Error> {
 
         loop {
 
@@ -186,7 +176,19 @@ impl<'a> Parser<'a> {
             // tableconstructor ::= `{´ [fieldlist] `}´
             if self.process_table_constructor(elements, token_pool)? { continue; }
 
-            return Ok(())
+            if Parser::process_field(elements)? { continue; }
+            
+            if Parser::process_field_list(elements)? { continue; }
+
+            break;
+        }
+
+        match elements.len() {
+            1 => Ok(elements.remove(0)),
+            0 => return Err(ParserError::general("parser found an empty statement?")),
+            _ => return Err(ParserError::not_a_statement(&self,
+                elements[0].line_number(), elements[0].code_start(),
+                elements[elements.len()-1].code_end()))
         }
     }
 
@@ -659,7 +661,6 @@ impl<'a> Parser<'a> {
                 let item = Element::create(vec![op], vec![exp])?;
 
                 statement.insert(i, CodeRef { item, code_end, code_start, line_number });
-                println!("did it");
                 return Ok(true);
             }
         }}
@@ -818,28 +819,30 @@ impl<'a> Parser<'a> {
             if elements[i].i().matches_token(Token::LeftMoustache) {
                 self.get_tokens_until_token(elements, token_pool, Token::RightMoustache, true)?;
 
-                // now we process the insides, we need to make sure
-                // to check for fields first, before we go for a field list.
-                loop { if Parser::process_field(elements)? { continue; } break; }
-                Parser::process_field_list(elements)?;
-
-                // after this we should get one object, if not then we messed
-                // something up somewhere
-
-                if elements.len() - i != 3 {
-                    // we are counting `{` `fieldlist` `}` so that is 3
-                    return Err(ParserError::general("error processing table constructor, errr!"));
+                // we are going to pull out the insides for processing
+                let mut insides : Vec<CodeElement> = elements.drain(i+1 .. elements.len()-1).collect();
+                let mut pool : Vec<CodeToken> = Vec::new();
+                // and we parse the insides separately
+                let processed_insides = self.parse(&mut insides, &mut pool)?;
+                // now we check it worked out 
+                if !processed_insides.i().is_field_list() {
+                    return Err(ParserError::unexpected(&self,
+                        processed_insides.line_number(),
+                        processed_insides.code_start(),
+                        processed_insides.code_end(),
+                        "expected a field list here."
+                    ));
                 }
+                
 
                 let left = elements.remove(i);
-                let fields = elements.remove(i);
                 let right = elements.remove(elements.len()-1);
 
                 let code_start = left.code_start();
                 let code_end = right.code_end();
                 let line_number = left.line_number();
 
-                let item = Element::create(vec![left, right], vec![fields])?;
+                let item = Element::create(vec![left, right], vec![processed_insides])?;
 
                 elements.insert(i, CodeRef {
                     item, code_end, code_start, line_number
@@ -1001,7 +1004,7 @@ mod tests {
         -- comment here
         x = 1 + - 2
         x,y = 2,3
-        tabletest = { a = 1; b = 2; c = 3, ["return"] = 4; }
+        tabletest = { a = 1; b = 2; c = 2+3, ["return"] = 4; }
         bob[x] = 4
         jim = 3 + bob.x
         local bob,jim,mary = 1,2+3,(4*5)
