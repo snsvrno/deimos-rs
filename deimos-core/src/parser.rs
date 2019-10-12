@@ -11,10 +11,6 @@ pub struct Parser<'a> {
     pub file_name : String,
     pub raw_code : &'a str, 
     pub blocks : Option<CodeElement>, 
-
-    // private things
-    tokens : Vec<CodeToken>,
-
 }
 
 impl<'a> CodeInformation for Parser<'a> {
@@ -22,33 +18,23 @@ impl<'a> CodeInformation for Parser<'a> {
     fn file_name(&self) -> String { self.file_name.to_string() }
 }
 
-impl<'a> std::default::Default for Parser<'a> {
-    fn default() -> Parser<'a> {
-        Parser {
-            raw_code : "",
-            file_name : String::from("buffer"),
-            blocks : None,
-
-            tokens : Vec::new(),
-
-        }
-    }
-}
-
 impl<'a> Parser<'a> {
     pub fn from_scanner(scanner : Scanner<'a>) -> Result<Parser<'a>,Error> {
         //! creates a parser object from a scanner object. this
         //! will consume the scanner.
+
+        let tokens = scanner.tokens;
         
-        let parser = Parser {
+        let mut parser = Parser {
             file_name : scanner.file_name,
             raw_code : scanner.raw_code,
-            tokens : scanner.tokens,
-
-            .. Parser::default()
+            blocks : None,
         };
 
-        parser.parse()
+        let blocks = parser.process(tokens)?;
+        parser.blocks = Some(blocks);
+
+        Ok(parser)
     }
 
     // PRIVATE FUNCTIONS /////////////////////////////////////
@@ -56,95 +42,22 @@ impl<'a> Parser<'a> {
     //////////////////////////////////////////////////////////
     //////////////////////////////////////////////////////////
 
-    fn parse(mut self) -> Result<Parser<'a>, Error> {
+    fn process(&mut self, mut tokens : Vec<CodeToken>) -> Result<CodeElement, Error> {
         //! will attempt to parse the object
-
-
-        // checks to see if we already assigned the blocks, if there 
-        // is then something is wrong? you shouldn't be calling
-        // this thing twice on the same object.
-        if self.blocks.is_some() {
-            return Err(ParserError::general("can't run parse more than once."));
-        }
 
         let mut working_phrase : Vec<CodeElement> = Vec::new();
 
         loop {
 
             // the next statement of code, using LUA's statement rules
-            match self.get_next_statement() {
+            match Parser::get_next_statement(&mut tokens) {
                 None => break,
                 Some(mut statement) => {
 
                     // now we try and match that statement to something
                     // from the lua syntax
 
-                    loop {
-
-                        println!("=====");
-                        for s in statement.iter() {
-                            println!("{}:{}:{}",s,s.code_start(), s.code_end());
-                        }
-
-                        if Parser::process_comment(&mut statement)? { continue; }
-
-                        // stat ::=  varlist `=´ explist | 
-                        if Parser::process_statement_assignment(&mut statement)? { continue; }
-                        
-                        // stat ::=  do block end | 
-                        // stat ::=  while exp do block end | 
-                        // stat ::=  repeat block until exp | 
-                        // stat ::=  if exp then block {elseif exp then block} [else block] end | 
-                        // stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
-                        // stat ::=  for namelist in explist do block end | 
-                        // stat ::=  function funcname funcbody | 
-                        // stat ::=  local function Name funcbody | 
-                        
-                        // stat ::=  local namelist [`=´ explist] 
-                        if Parser::process_statement_local_assignment(&mut statement)? { continue; }
-
-                        // laststat ::= return [explist] | break
-                        if Parser::process_last_statement(&mut statement)? { continue; }
-                        
-                        // funcname ::= Name {`.´ Name} [`:´ Name]
-
-                        // varlist ::= var {`,´ var}
-                        if Parser::process_var_list(&mut statement)? { continue; }
-
-                        // var ::=  prefixexp `[´ exp `]´ | prefixexp `.´ Name 
-                        if Parser::process_var(&mut statement)? { continue; }
-
-                        // namelist ::= Name {`,´ Name}
-                        if Parser::process_name_list(&mut statement)? { continue; }
-
-                        // exp ::=  exp binop exp
-                        if Parser::process_binop(&mut statement)? { continue; }
-
-                        // exp ::=  unop exp
-                        if Parser::process_unop(&mut statement)? { continue; }
-
-                        // explist ::= {exp `,´} exp
-                        if Parser::process_exp_list(&mut statement)? { continue; }
-
-                        // prefixexp ::= `(´ exp `)´
-                        if Parser::process_prefix_exp(&mut statement)? { continue; }
-
-                        // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
-                        /*
-                        args ::=  `(´ [explist] `)´ | tableconstructor | String 
-
-                        function ::= function funcbody
-
-                        funcbody ::= `(´ [parlist] `)´ block end
-
-                        parlist ::= namelist [`,´ `...´] | `...´
-
-                        */
-                        // tableconstructor ::= `{´ [fieldlist] `}´
-                        if self.process_table_constructor(&mut statement)? { continue; }
-
-                        break;
-                    }
+                    self.parse(&mut statement, &mut tokens)?;
 
                     // checks if we reduced it down to a single element, if so 
                     // then we can add it to the working_phrase and move on.
@@ -158,6 +71,12 @@ impl<'a> Parser<'a> {
                 }
             }
         }
+
+
+        self.process_block(working_phrase)
+    }
+
+    fn process_block(&self, working_phrase : Vec<CodeElement>) -> Result<CodeElement,Error> {
 
         if working_phrase.len() == 0 {
             return Err(ParserError::general("parser found empty `working_phrase`?"))
@@ -203,12 +122,75 @@ impl<'a> Parser<'a> {
             }
         };
 
-        self.blocks = Some(chunk);
-
-        Ok(self)
+        Ok(chunk)
     }
 
-    fn get_next_statement(&mut self) -> Option<Vec<CodeElement>> {
+    fn parse(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<(), Error> {
+
+        loop {
+
+            if Parser::process_comment(elements)? { continue; }
+
+            // stat ::=  varlist `=´ explist | 
+            if Parser::process_statement_assignment(elements)? { continue; }
+            
+            // stat ::=  do block end | 
+            // stat ::=  while exp do block end | 
+            // stat ::=  repeat block until exp | 
+            // stat ::=  if exp then block {elseif exp then block} [else block] end | 
+            // stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
+            // stat ::=  for namelist in explist do block end | 
+            // stat ::=  function funcname funcbody | 
+            // stat ::=  local function Name funcbody | 
+            
+            // stat ::=  local namelist [`=´ explist] 
+            if Parser::process_statement_local_assignment(elements)? { continue; }
+
+            // laststat ::= return [explist] | break
+            if Parser::process_last_statement(elements)? { continue; }
+            
+            // funcname ::= Name {`.´ Name} [`:´ Name]
+
+            // varlist ::= var {`,´ var}
+            if Parser::process_var_list(elements)? { continue; }
+
+            // var ::=  prefixexp `[´ exp `]´ | prefixexp `.´ Name 
+            if Parser::process_var(elements)? { continue; }
+
+            // namelist ::= Name {`,´ Name}
+            if Parser::process_name_list(elements)? { continue; }
+
+            // exp ::=  exp binop exp
+            if Parser::process_binop(elements)? { continue; }
+
+            // exp ::=  unop exp
+            if Parser::process_unop(elements)? { continue; }
+
+            // explist ::= {exp `,´} exp
+            if Parser::process_exp_list(elements)? { continue; }
+
+            // prefixexp ::= `(´ exp `)´
+            if Parser::process_prefix_exp(elements)? { continue; }
+
+            // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
+            /*
+            args ::=  `(´ [explist] `)´ | tableconstructor | String 
+
+            function ::= function funcbody
+
+            funcbody ::= `(´ [parlist] `)´ block end
+
+            parlist ::= namelist [`,´ `...´] | `...´
+
+            */
+            // tableconstructor ::= `{´ [fieldlist] `}´
+            if self.process_table_constructor(elements, token_pool)? { continue; }
+
+            return Ok(())
+        }
+    }
+
+    fn get_next_statement(tokens : &mut Vec<CodeToken>) -> Option<Vec<CodeElement>> {
         //! gets the next state of tokens that makes as statement. there are a few
         //! cases where this won't be accurate (such as table definitions using ';')
         //! because it looks for EOL and ';' characters to draw the statement line
@@ -216,9 +198,9 @@ impl<'a> Parser<'a> {
         let mut phrase : Vec<CodeElement> = Vec::new();
         loop {
             // makes sure we still have tokens to work with.
-            if self.tokens.len() == 0 { break; }
+            if tokens.len() == 0 { break; }
 
-            let token = self.tokens.remove(0);
+            let token = tokens.remove(0);
 
             // we reached the end and have some tokens in the phrase,
             // lets send that back
@@ -242,7 +224,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn get_tokens_until_token(&mut self, elements : &mut Vec<CodeElement>, token : Token, nesting : bool) -> Result<(),Error> {
+    fn get_tokens_until_token(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>, token : Token, nesting : bool) -> Result<(),Error> {
         //! will return all the tokens (including semicolons) until it finds the supplied token.
         //! if nesting then it will make sure to count open and closed tokens
 
@@ -264,11 +246,11 @@ impl<'a> Parser<'a> {
 
         loop {
             // makes sure we still have tokens left to loop through.
-            if self.tokens.len() == 0 { 
+            if token_pool.len() == 0 { 
                 return Err(ParserError::general(&format!("ran out of tokens in the stream, looking for '{}' but never found it?",token)));
             }
 
-            let popped_token = self.tokens.remove(0);
+            let popped_token = token_pool.remove(0);
 
             // stores the result of the final done check.
             let done = {
@@ -826,7 +808,7 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn process_table_constructor(&mut self, elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+    fn process_table_constructor(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
 
         //! tableconstructor ::= `{´ [fieldlist] `}´
 
@@ -834,7 +816,7 @@ impl<'a> Parser<'a> {
         // then we ask for all the tokens until the `}`. **we need to worry about nesting**
         for i in 0 .. elements.len() {
             if elements[i].i().matches_token(Token::LeftMoustache) {
-                self.get_tokens_until_token(elements, Token::RightMoustache, true)?;
+                self.get_tokens_until_token(elements, token_pool, Token::RightMoustache, true)?;
 
                 // now we process the insides, we need to make sure
                 // to check for fields first, before we go for a field list.
