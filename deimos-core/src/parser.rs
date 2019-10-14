@@ -166,9 +166,11 @@ impl<'a> Parser<'a> {
             if Parser::process_prefix_exp(elements)? { continue; }
 
             // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
-            /*
-            args ::=  `(´ [explist] `)´ | tableconstructor | String 
-
+            if Parser::process_functioncall(elements)? { continue; }
+            
+            // args ::=  `(´ [explist] `)´ | tableconstructor | String
+            if Parser::process_args(elements)? { continue; }
+/*
             function ::= function funcbody
 
             funcbody ::= `(´ [parlist] `)´ block end
@@ -706,6 +708,86 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn process_args(elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+        // `(´ [explist] `)´
+
+        if elements.len() >= 3 { for i in 0 .. elements.len() - 2 { 
+            if elements[i].i().matches_token(Token::LeftParen)
+            && elements[i+1].i().is_exp_list()
+            && elements[i+2].i().matches_token(Token::RightParen) {
+                let left = elements.remove(i);
+                let explist = elements.remove(i);
+                let right = elements.remove(i);
+
+                let code_start : usize = left.code_start();
+                let line_number : usize = left.line_number();
+                let code_end : usize = right.code_end();
+
+                let item = Element::create(vec![left, right], vec![explist])?;
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+        Ok(false)
+    }
+
+    fn process_functioncall(elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+        //!  - prefixexp args
+        //!  - prefixexp `:´ Name args 
+
+        // prefixexp:Name args
+        if elements.len() >= 4 { for i in 0 .. elements.len() - 3 {
+            if elements[i].i().is_prefix_exp()
+            && elements[i+1].i().matches_token(Token::Colon) 
+            && elements[i+2].i().is_name() 
+            && elements[i+3].i().is_args() {
+
+                let prefix = elements.remove(i);
+                let colon = elements.remove(i);
+                let name = elements.remove(i);
+                let args = elements.remove(i);
+
+                let code_start : usize = prefix.code_start();
+                let line_number : usize = prefix.line_number();
+                let code_end : usize = args.code_end();
+
+                let item = Element::create(vec![colon], vec![prefix, name, args])?;
+                
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+        // prefixexp args
+        if elements.len() >= 2 { for i in 0 .. elements.len() - 1 {
+            if elements[i].i().is_prefix_exp()
+            && elements[i+1].i().is_args() {
+                let prefix = elements.remove(i);
+                let args = elements.remove(i);
+
+                let code_start : usize = prefix.code_start();
+                let line_number : usize = prefix.line_number();
+                let code_end : usize = args.code_end();
+
+                let item = Element::create(vec![], vec![prefix, args])?;
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+        Ok(false)
+    }
+
     fn process_prefix_exp(statement : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! prefixexp ::= `(´ exp `)´
 
@@ -1221,6 +1303,9 @@ mod tests {
             x = x + 1
             do
                 local bob = 10
+                bob:hiddenFunction("other stuff")
+                print("this is the bob" .. bob)
+                add(1,2,3,4)
             end
         until x >= 10
 

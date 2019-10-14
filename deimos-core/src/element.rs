@@ -510,7 +510,7 @@ impl Element {
         	if identifiers[0] == Token::Colon
         	&& elements[0].i().is_prefix_exp()
         	&& elements[1].i().is_name() 
-        	&& elements[1].i().is_args() {
+        	&& elements[2].i().is_args() {
         		return true;
         	}
         }
@@ -519,9 +519,9 @@ impl Element {
 	}
 
 	pub fn is_args(&self) -> bool {
-		//! [ ] `(´ [explist] `)´ 
-		//! [ ] tableconstructor
-		//! [ ] String 
+		//! [x] `(´ [explist] `)´ 
+		//! [x] tableconstructor
+		//! [x] String 
 
 		if self.is_string() { return true; }
 		if self.is_table_constructor() { return true; }
