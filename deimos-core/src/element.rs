@@ -599,10 +599,9 @@ impl Element {
 		let Element { ref identifiers, ref elements } = self;
 
 		if identifiers.len() == 0 && elements.len() == 2 {
-			if elements[0].i().is_name_list() {
-				if let Some(token) = elements[1].i().get_token() {
-					if token.i() == Token::TriplePeriod { return true; }
-				}
+			if elements[0].i().is_name_list() 
+            && elements[1].i().matches_token(Token::TriplePeriod) {
+                return true;
 			}
 		}
 

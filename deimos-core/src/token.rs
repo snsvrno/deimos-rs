@@ -73,7 +73,7 @@ impl std::iter::FromIterator<CodeElement> for Vec<CodeToken> {
         let mut token_vec : Vec<CodeToken> = Vec::new();
 
         for element in iter {
-            
+
             let code_start = element.code_start();
             let code_end = element.code_end();
             let line_number = element.line_number();
@@ -140,6 +140,7 @@ impl Token {
             Token::LeftMoustache => Some(Token::RightMoustache),
             Token::Do => Some(Token::End),
             Token::Repeat => Some(Token::Until),
+            Token::Function => Some(Token::End),
             _ => None,
         }
     } 

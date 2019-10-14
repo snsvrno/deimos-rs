@@ -53,7 +53,6 @@ impl<'a> Parser<'a> {
             match Parser::get_next_statement(&mut tokens) {
                 None => break,
                 Some(mut statement) => {
-
                     // now we try and match that statement to something
                     // from the lua syntax
 
@@ -61,7 +60,6 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-
 
         self.process_block(working_phrase)
     }
@@ -119,6 +117,12 @@ impl<'a> Parser<'a> {
 
         loop {
 
+            println!("==============");
+            for i in elements.iter() {
+                println!("  {}",i.i());
+            }
+            println!("==============");
+
             if Parser::process_comment(elements)? { continue; }
 
             // stat ::=  varlist `=´ explist | 
@@ -130,11 +134,13 @@ impl<'a> Parser<'a> {
             // stat ::=  while exp do block end | 
             // stat ::=  repeat block until exp |
             if self.process_statement_repeat_until(elements, token_pool)? { continue; } 
+
             // stat ::=  if exp then block {elseif exp then block} [else block] end | 
             // stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
             // stat ::=  for namelist in explist do block end | 
-            // stat ::=  function funcname funcbody | 
-            // stat ::=  local function Name funcbody | 
+
+            // stat ::=  function funcname funcbody | local function Name funcbody
+            if Parser::process_function_definition(elements)? { continue; }
             
             // stat ::=  local namelist [`=´ explist] 
             if Parser::process_statement_local_assignment(elements)? { continue; }
@@ -153,6 +159,20 @@ impl<'a> Parser<'a> {
             // namelist ::= Name {`,´ Name}
             if Parser::process_name_list(elements)? { continue; }
 
+            // to make sure we catch a name_list,... before it
+            // converted to an expression list, because a name_list
+            // can also be an exp_list, and then we can add `...` because 
+            // that is also an expression..
+            if Parser::process_parlist(elements)? { continue; }
+
+            // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
+            if Parser::process_functioncall(elements)? { continue; }
+            if Parser::process_args(elements)? { continue; }
+
+            // function ::= function funcbody (this is anon function, not named functions)
+            if Parser::process_function(elements)? { continue; }
+            if self.process_funcbody(elements, token_pool)? { continue; }
+
             // exp ::=  exp binop exp
             if Parser::process_binop(elements)? { continue; }
 
@@ -165,28 +185,19 @@ impl<'a> Parser<'a> {
             // prefixexp ::= `(´ exp `)´
             if Parser::process_prefix_exp(elements)? { continue; }
 
-            // functioncall ::=  prefixexp args | prefixexp `:´ Name args 
-            if Parser::process_functioncall(elements)? { continue; }
-            
-            // args ::=  `(´ [explist] `)´ | tableconstructor | String
-            if Parser::process_args(elements)? { continue; }
-/*
-            function ::= function funcbody
-
-            funcbody ::= `(´ [parlist] `)´ block end
-
-            parlist ::= namelist [`,´ `...´] | `...´
-
-            */
             // tableconstructor ::= `{´ [fieldlist] `}´
             if self.process_table_constructor(elements, token_pool)? { continue; }
-
             if Parser::process_field(elements)? { continue; }
-            
             if Parser::process_field_list(elements)? { continue; }
 
             break;
         }
+
+        /*println!("===");
+        for i in elements.iter() {
+            println!("   {}",i.i());
+        }*/
+        // println!("{}",elements.len());
 
         match elements.len() {
             1 => Ok(elements.remove(0)),
@@ -201,6 +212,10 @@ impl<'a> Parser<'a> {
         //! gets the next state of tokens that makes as statement. there are a few
         //! cases where this won't be accurate (such as table definitions using ';')
         //! because it looks for EOL and ';' characters to draw the statement line
+        //! 
+        //! also added that comments are treated as newline elements, because each
+        //! comment is kind of its own entity in the world, so if you have code and 
+        //! then a comment afterwards that can be considered as 2 statements.
 
         let mut phrase : Vec<CodeElement> = Vec::new();
         loop {
@@ -209,6 +224,11 @@ impl<'a> Parser<'a> {
 
             let token = tokens.remove(0);
 
+            // for a comment, we need to place it back inside so we get it later
+            if token == Token::Comment("".to_string()) && phrase.len() > 0 {
+                tokens.insert(0,token);
+                break;
+            }
             // we reached the end and have some tokens in the phrase,
             // lets send that back
             if (token == Token::EOL || token == Token::SemiColon) && phrase.len() > 0 { break; }
@@ -565,6 +585,8 @@ impl<'a> Parser<'a> {
     fn process_var_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! [ ] {var `,´} var
 
+        // TODO , generic this and make all the list use the same base function.
+
         // we need to start at every position and keep going until we hit 
         // something that doesn't fit the pattern anymore
         for i in 0 .. elements.len() {
@@ -594,12 +616,16 @@ impl<'a> Parser<'a> {
                 // move the ending because it matches.
                 ending = j;
             }
+
             // now we check if we got anything useful.
-            if i != ending && (ending-i) % 2 == 0 {
-                // we are checking that (1) they are not the same, and the difference
-                // is even => a,b,c should be 0,4 which is even. you can't end an exp
-                // list with a , so there should always be 5 tokens, which makes a dif
-                // of 4
+            if i != ending {
+                // we are checking that (1) they are not the same, we can't end
+                // a list with a comma, but we might have one because of something
+                // else (like namelist, ...) so we should not check for it here.
+                
+                // we get rid of the ending ',' is there is one by moving the
+                // ending
+                if elements[ending].i().matches_token(Token::Comma) { ending -= 1; }
 
                 let mut exps : Vec<CodeElement> = Vec::new();
 
@@ -636,7 +662,7 @@ impl<'a> Parser<'a> {
 
 
     fn process_name_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
-        //! [ ] {exp `,´} exp
+        //! [ ] {Name `,´} Name
 
         // we need to start at every position and keep going until we hit 
         // something that doesn't fit the pattern anymore
@@ -669,11 +695,14 @@ impl<'a> Parser<'a> {
             }
 
             // now we check if we got anything useful.
-            if i != ending && (ending-i) % 2 == 0 {
-                // we are checking that (1) they are not the same, and the difference
-                // is even => a,b,c should be 0,4 which is even. you can't end an exp
-                // list with a , so there should always be 5 tokens, which makes a dif
-                // of 4
+            if i != ending {
+                // we are checking that (1) they are not the same, we can't end
+                // a list with a comma, but we might have one because of something
+                // else (like namelist, ...) so we should not check for it here.
+                
+                // we get rid of the ending ',' is there is one by moving the
+                // ending
+                if elements[ending].i().matches_token(Token::Comma) { ending -= 1; }
 
                 let mut exps : Vec<CodeElement> = Vec::new();
 
@@ -732,6 +761,92 @@ impl<'a> Parser<'a> {
             }
         }}
 
+        Ok(false)
+    }
+
+    fn process_function(elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+        //! function funcbody
+        if elements.len() >= 2 { for i in 0 .. elements.len()-1 {
+            if elements[i].i().matches_token(Token::Function) 
+            && elements[i+1].i().is_func_body() {
+                let function = elements.remove(i);
+                let funcbody = elements.remove(i);
+
+                let code_start : usize = function.code_start();
+                let line_number : usize = function.line_number();
+                let code_end : usize = funcbody.code_end();
+
+                let item = Element::create(vec![function], vec![funcbody])?;
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+
+            }
+        }}
+
+        Ok(false)
+    }
+
+    fn process_funcbody(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
+        // `(´ [parlist] `)´ block end
+        // most of the time, this is multilined, so we're going to only
+        // check for 3 tokens first.
+
+        if elements.len() >= 3 { for i in 0 .. elements.len() - 2 {
+            if elements[i].i().matches_token(Token::LeftParen)
+            && elements[i+1].i().is_par_list()
+            && elements[i+2].i().matches_token(Token::RightParen) {
+                self.get_tokens_until_token(elements, token_pool, Token::End)?;
+
+                let left = elements.remove(i);
+                let parlist = elements.remove(i);
+                let right = elements.remove(i);
+                let final_end = elements.remove(elements.len()-1);
+                let block = self.process(elements.drain(i ..).collect())?;
+
+                let code_start : usize = left.code_start();
+                let line_number : usize = left.line_number();
+                let code_end : usize = final_end.code_end();
+
+                let item = Element::create(vec![left,right,final_end], vec![parlist,block])?;
+
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+
+        Ok(false)
+    }
+
+    fn process_parlist(elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
+        // namelist `,´ `...´
+
+        if elements.len() >= 3 { for i in 0 .. elements.len() - 2 {
+            if elements[i].i().is_name_list()
+            && elements[i+1].i().matches_token(Token::Comma)
+            && elements[i+2].i().matches_token(Token::TriplePeriod) {
+                let namelist = elements.remove(i);
+                let _comma = elements.remove(i);
+                let tripleperiod = elements.remove(i);
+
+                let code_start : usize = namelist.code_start();
+                let line_number : usize = namelist.line_number();
+                let code_end : usize = tripleperiod.code_end();
+
+                let item = Element::create(vec![], vec![namelist,tripleperiod])?;
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }}
+    
         Ok(false)
     }
 
@@ -948,6 +1063,66 @@ impl<'a> Parser<'a> {
                 return Ok(true);
             }
         }
+
+        Ok(false)
+    }
+
+    fn process_function_definition(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+
+        // stat ::=  local function Name funcbody |  
+        if elements.len() >= 4 { for i in 0 .. elements.len() - 3 {
+            if elements[i].i().matches_token(Token::Local) 
+            && elements[i+1].i().matches_token(Token::Function)
+            && elements[i+2].i().is_name()
+            && elements[i+3].i().is_func_body() {
+
+                let local = elements.remove(0);
+                let function = elements.remove(0);
+                let name = elements.remove(0);
+                let funcbody = elements.remove(0);
+
+                let code_start = local.code_start();
+                let code_end = funcbody.code_end();
+                let line_number = local.line_number();
+
+                let item = Element::create(vec![local,function], vec![name,funcbody])?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+
+            }
+        }}
+        
+        // stat ::=  function funcname funcbody | 
+        if elements.len() >= 3 { for i in 0 .. elements.len() - 2 { 
+            println!("{} {}",elements[i].i(),elements[i].i().matches_token(Token::Function));
+            println!("{} {}",elements[i+1].i(),elements[i+1].i().is_func_name());
+            println!("{} {}",elements[i+2].i(),elements[i+2].i().is_func_body());
+            if elements[i].i().matches_token(Token::Function)
+            && elements[i+1].i().is_func_name()
+            && elements[i+2].i().is_func_body() {;
+
+                let function = elements.remove(0);
+                let name = elements.remove(0);
+                let funcbody = elements.remove(0);
+
+                let code_start = function.code_start();
+                let code_end = funcbody.code_end();
+                let line_number = function.line_number();
+
+                let item = Element::create(vec![function], vec![name,funcbody])?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+
+            }
+        }}
 
         Ok(false)
     }
@@ -1274,11 +1449,11 @@ impl<'a> Parser<'a> {
 mod tests {
 
     #[test]
-    // #[ignore]
+    //#[ignore]
     pub fn test_failure() {
         use crate::scanner::Scanner;
         use crate::parser::Parser;
-
+        
         let code : &str = r#"
         -- comment here
         x = 1 + - 2
@@ -1288,6 +1463,22 @@ mod tests {
         jim = 3 + bob.x
         local bob,jim,mary = 1,2+3,(4*5)
         local bob
+
+        local aTestFunction = function (q,w,e,r,t,...)
+            -- this function does some cool stuff,
+            -- you should really check it out!!
+
+            --[[ this is another comment
+            just to make sure it all really works in the 
+            end
+            ]]--
+
+            q = w + e + r
+            y = 10
+
+            return q,w,e,r,t,y
+        end
+
 
         do
             x = 5

@@ -167,7 +167,6 @@ impl<'a> Scanner<'a> {
         //! looks for the next characters provided in the stream, if found
         //! then it will consume them and return true, if not then it will
         //! return false and not do anything
-         
         // determines what the search length should be.
         let length = chars.len();
 
@@ -176,23 +175,24 @@ impl<'a> Scanner<'a> {
         // raw code, if so then we won't find it because nothing
         // exists in the void after our code, so lets just return
         // false
-        if self.raw_code.len() - 1 < self.cursor_pos + length {
+        if self.raw_code.len() - 1 < self.cursor_pos + (length-1) {
             return false;
         }
 
         // now will look in only the length of the searching characters, 
         // most of the time this will probably be `1`
-        for i in 0 .. length {
+        //for i in 0 .. length {
             // get the next character slice
-            let char = &self.raw_code[self.cursor_pos + i .. self.cursor_pos + i + 1];
+            let char = &self.raw_code[self.cursor_pos .. self.cursor_pos + length];
 
             // checks if its what we expect so far we will keep doing 
             // this until we hit a point where it doesn't match, 
             // and that means its not the characters we are looking for
-            if char != &chars[i .. i + 1] {
-                return false;
-            }
-        }
+            //if char != &chars[i .. i + 1] {
+            //    return false;
+            //}
+            if char != chars { return false; }
+        //}
 
         // we found what we were looking for, so move the cursor 
         // we don't return the characters because we are counting on
@@ -496,9 +496,7 @@ mod tests {
     pub fn test_failure() {
         use crate::scanner::Scanner;
 
-        let code : &str = r#"
-        x = x + 5
-        "#;
+        let code : &str = r#"q,..."#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua"));
 
