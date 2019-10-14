@@ -67,7 +67,7 @@ impl ParserError {
         code_info.cursor_pos = start;
         code_info.line_number = line;
         
-        ParserError::NOSTATEMENT(code_info).into()
+        ParserError::EXPECT(code_info).into()
     }
 
     pub fn unterminated(parser : &Parser, line : usize, start : usize, end : usize, description : &str) -> Error {
@@ -80,6 +80,6 @@ impl ParserError {
         code_info.cursor_pos = start;
         code_info.line_number = line;
         
-        ParserError::NOSTATEMENT(code_info).into()
+        ParserError::UNTERMINATED(code_info).into()
     }
 }

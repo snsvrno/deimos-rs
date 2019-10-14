@@ -117,12 +117,12 @@ impl<'a> Parser<'a> {
 
         loop {
 
-            println!("==============");
+            /*println!("==============");
             for i in elements.iter() {
                 println!("  {}",i.i());
             }
             println!("==============");
-
+            */
             if Parser::process_comment(elements)? { continue; }
 
             // stat ::=  varlist `=´ explist | 
@@ -140,7 +140,7 @@ impl<'a> Parser<'a> {
             // stat ::=  for namelist in explist do block end | 
 
             // stat ::=  function funcname funcbody | local function Name funcbody
-            if Parser::process_function_definition(elements)? { continue; }
+            if self.process_function_definition(elements, token_pool)? { continue; }
             
             // stat ::=  local namelist [`=´ explist] 
             if Parser::process_statement_local_assignment(elements)? { continue; }
@@ -1067,7 +1067,7 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn process_function_definition(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
+    fn process_function_definition(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
 
         // stat ::=  local function Name funcbody |  
         if elements.len() >= 4 { for i in 0 .. elements.len() - 3 {
@@ -1097,23 +1097,79 @@ impl<'a> Parser<'a> {
         }}
         
         // stat ::=  function funcname funcbody | 
-        if elements.len() >= 3 { for i in 0 .. elements.len() - 2 { 
-            println!("{} {}",elements[i].i(),elements[i].i().matches_token(Token::Function));
-            println!("{} {}",elements[i+1].i(),elements[i+1].i().is_func_name());
-            println!("{} {}",elements[i+2].i(),elements[i+2].i().is_func_body());
-            if elements[i].i().matches_token(Token::Function)
-            && elements[i+1].i().is_func_name()
-            && elements[i+2].i().is_func_body() {;
+        if elements.len() >= 0 { 
+            if elements[0].i().matches_token(Token::Function) {
+                self.get_tokens_until_token(elements, token_pool, Token::End)?;
+
+                let (start_of_funcbody, end_of_funcbody) = {
+                    let mut pos = 0;
+                    let mut end = 0;
+                    for j in 0 .. elements.len() {
+                        if elements[j].i().matches_token(Token::LeftParen) {
+                            pos = j-1;
+                        }
+                        if elements[j].i().matches_token(Token::RightParen) {
+                            end = j;
+                            break;
+                        }
+                    }
+                    (pos, end)
+                };
 
                 let function = elements.remove(0);
-                let name = elements.remove(0);
-                let funcbody = elements.remove(0);
+                let final_end = elements.remove(elements.len()-1);
+
+                // a hack to build the funcbody object.
+                let funcbody = {
+                    let funcbody = self.process(elements.drain(end_of_funcbody .. ).collect())?;
+                    let parmaarea = {
+                        let mut param : Vec<CodeToken> = elements.drain(start_of_funcbody + 1 ..  elements.len() - 1).collect();
+                        let mut temp_elements = Parser::get_next_statement(&mut param).unwrap();
+                        self.parse(&mut temp_elements, &mut param)?
+                    };
+                    
+                    if !funcbody.i().is_block() {
+                        return Err(ParserError::unexpected(&self, funcbody.line_number(), funcbody.code_start(), funcbody.code_end(),
+                            "expected a function body here."));
+                    }
+                    if !parmaarea.i().is_par_list() {
+                        return Err(ParserError::unexpected(&self, parmaarea.line_number(), parmaarea.code_start(), parmaarea.code_end(),
+                            "expected function parmeters here."));
+                    }
+
+                    let right = elements.remove(elements.len()-1);
+                    let left = elements.remove(elements.len()-1);
+
+                    let code_start = left.code_start();
+                    let code_end = final_end.code_end();
+                    let line_number = left.line_number();
+
+                    let item = Element::create(vec![left,right,final_end], vec![parmaarea,funcbody])?;
+
+                    CodeRef{ item, code_start, code_end, line_number }
+                };
+
+                if !funcbody.i().is_func_body() {
+                    return Err(ParserError::unexpected(&self, funcbody.line_number(), funcbody.code_start(), funcbody.code_end(),
+                        "expected a function body here."));
+                }
+
+                let funcname = {
+                    let mut funcname : Vec<CodeToken> = elements.drain(..).collect();
+                    let mut temp_elements = Parser::get_next_statement(&mut funcname).unwrap();
+                    self.parse(&mut temp_elements, &mut funcname)?
+                };
+
+                if !funcname.i().is_func_name() {
+                    return Err(ParserError::unexpected(&self, funcname.line_number(), funcname.code_start(), funcname.code_end(),
+                        "expected a function name here."));
+                }
 
                 let code_start = function.code_start();
                 let code_end = funcbody.code_end();
                 let line_number = function.line_number();
 
-                let item = Element::create(vec![function], vec![name,funcbody])?;
+                let item = Element::create(vec![function], vec![funcname,funcbody])?;
 
                 elements.insert(0,CodeRef{
                     item, code_start, code_end, line_number
@@ -1122,7 +1178,7 @@ impl<'a> Parser<'a> {
                 return Ok(true);
 
             }
-        }}
+        }
 
         Ok(false)
     }
@@ -1463,6 +1519,11 @@ mod tests {
         jim = 3 + bob.x
         local bob,jim,mary = 1,2+3,(4*5)
         local bob
+
+        function test2(a,s)
+            -- this doesn't do anything either!!!
+            print('test')
+        end
 
         local aTestFunction = function (q,w,e,r,t,...)
             -- this function does some cool stuff,
