@@ -180,7 +180,7 @@ impl Element {
         }
 
         // repeat block until exp 
-        if identifiers.len() == 2 && elements.len() == 1 {
+        if identifiers.len() == 2 && elements.len() == 2 {
         	if identifiers[0] == Token::Repeat 
         	&& identifiers[1] == Token::Until 
         	&& elements[0].i().is_block() 

@@ -1,4 +1,5 @@
 use crate::coderef::CodeRef;
+use crate::element::CodeElement;
 
 pub type CodeToken = CodeRef<Token>; 
 
@@ -60,6 +61,37 @@ impl PartialEq<Token> for &Token {
     }
 }
 
+impl std::iter::FromIterator<CodeElement> for Vec<CodeToken> {
+    fn from_iter<I : IntoIterator<Item=CodeElement>>(iter : I) -> Self {
+        //! takes an iterator of `CodeElement` and converts it to straight
+        //! tokens, needs to be careful because this will not work unless
+        //! these items are actually tokens, it create and inject dummy
+        //! bad tokens if the element isn't a token (this can create problems).
+        //! so be sure to use this only where you know what the element stream
+        //! is.
+
+        let mut token_vec : Vec<CodeToken> = Vec::new();
+
+        for element in iter {
+            
+            let code_start = element.code_start();
+            let code_end = element.code_end();
+            let line_number = element.line_number();
+
+            if let Some(token) = element.unwrap().consume_to_token() {
+                token_vec.push(token);   
+            } else {
+                token_vec.push(CodeRef::CodeRef{
+                    item : Token::Nil,
+                    code_start, code_end, line_number,
+                })
+            }
+        }
+
+        token_vec
+    }
+}
+
 impl Token {
 
     pub fn len(&self) -> usize {
@@ -107,6 +139,7 @@ impl Token {
         match self {
             Token::LeftMoustache => Some(Token::RightMoustache),
             Token::Do => Some(Token::End),
+            Token::Repeat => Some(Token::Until),
             _ => None,
         }
     } 

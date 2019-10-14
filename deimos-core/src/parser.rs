@@ -128,7 +128,8 @@ impl<'a> Parser<'a> {
             if self.process_statement_do_end(elements, token_pool)? { continue; }
 
             // stat ::=  while exp do block end | 
-            // stat ::=  repeat block until exp | 
+            // stat ::=  repeat block until exp |
+            if self.process_statement_repeat_until(elements, token_pool)? { continue; } 
             // stat ::=  if exp then block {elseif exp then block} [else block] end | 
             // stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
             // stat ::=  for namelist in explist do block end | 
@@ -869,6 +870,46 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
+    fn process_statement_repeat_until(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
+
+        // check that the first token is a `repeat`
+        if elements.len() > 0 {
+            if elements[0].i().matches_token(Token::Repeat) {
+                self.get_tokens_until_token(elements, token_pool, Token::Until)?;
+
+                // gets my bits to build the element
+                let repeat_token = elements.remove(0);
+                let until_token = elements.remove(elements.len()-1);
+                let repeat_statement = self.process(elements.drain(..).collect())?;
+                let until_statement = {
+                    match Parser::get_next_statement(token_pool) {
+                        None => return Err(ParserError::unterminated(&self, 
+                            repeat_token.line_number(), repeat_token.code_start(), repeat_token.code_end(),
+                            "expects a `until` statement for this `repeat`, none found.")),
+
+                        Some(mut statement) => {
+                            self.parse(&mut statement, token_pool)?
+                        },
+                    }
+                };
+
+                let code_start = repeat_token.code_start();
+                let code_end = until_statement.code_end();
+                let line_number = repeat_token.line_number();
+
+                let item = Element::create(vec![repeat_token, until_token], vec![repeat_statement, until_statement])?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                return Ok(true);
+            }
+        }
+
+        Ok(false)
+    }
+
     fn process_statement_do_end(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
 
         // check that the first token is a do, can't be any other way. do has to start the statement
@@ -1168,7 +1209,27 @@ mod tests {
 
         do
             x = 5
+            repeat 
+                x = x + 1
+                x = x - 1
+                x = x + 1
+            until
+                x >= 10
         end
+
+        repeat
+            x = x + 1
+            do
+                local bob = 10
+            end
+        until x >= 10
+
+        repeat
+            y = y + 1
+            local othervar = 10
+            y = y + othervar
+        until 
+            y >= 100
 
         return (2 + 3)
         "#;
