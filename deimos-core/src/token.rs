@@ -60,6 +60,11 @@ impl PartialEq<Token> for &Token {
         self == &other
     }
 }
+impl std::convert::AsRef<Token> for Token {
+    fn as_ref(&self) -> &Token {
+        &self
+    }
+}
 
 impl std::iter::FromIterator<CodeElement> for Vec<CodeToken> {
     fn from_iter<I : IntoIterator<Item=CodeElement>>(iter : I) -> Self {

@@ -222,7 +222,7 @@ impl Element {
         	if identifiers[0] == Token::For
         	&& identifiers[1] == Token::In
         	&& identifiers[2] == Token::Do
-        	&& identifiers[2] == Token::End
+        	&& identifiers[3] == Token::End
         	&& elements[0].i().is_name_list()
         	&& elements[1].i().is_exp_list()
         	&& elements[2].i().is_block() {
@@ -705,11 +705,11 @@ impl Element {
         }
 	}
 
-    pub fn matches_token(&self, token : Token) -> bool {
+    pub fn matches_token<T : AsRef<Token>>(&self, token : T) -> bool {
         //! used to check if this object is a token of type `token`
 
         if let Some(inside_token) = self.get_token() {
-            return inside_token == &token; 
+            return inside_token == token.as_ref(); 
         }
 
         false

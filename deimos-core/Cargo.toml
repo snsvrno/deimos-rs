@@ -8,3 +8,6 @@ exclude = ["src/test_macros"]
 [dependencies]
 failure = "0.1"
 failure_derive = "0.1"
+
+[features]
+dev-testing = []

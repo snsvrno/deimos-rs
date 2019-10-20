@@ -45,6 +45,9 @@ impl<'a> Parser<'a> {
     fn process(&mut self, mut tokens : Vec<CodeToken>) -> Result<CodeElement, Error> {
         //! will attempt to parse the object
 
+        #[cfg(feature = "dev-testing")]
+        println!(".. running process");
+
         let mut working_phrase : Vec<CodeElement> = Vec::new();
 
         loop {
@@ -115,14 +118,11 @@ impl<'a> Parser<'a> {
 
     fn parse(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<CodeElement, Error> {
 
-        loop {
+        #[cfg(feature = "dev-testing")]
+        println!(".. running parse");
 
-            /*println!("==============");
-            for i in elements.iter() {
-                println!("  {}",i.i());
-            }
-            println!("==============");
-            */
+        loop {
+            
             if Parser::process_comment(elements)? { continue; }
 
             // stat ::=  varlist `=´ explist | 
@@ -132,12 +132,16 @@ impl<'a> Parser<'a> {
             if self.process_statement_do_end(elements, token_pool)? { continue; }
 
             // stat ::=  while exp do block end | 
+            if self.process_while_do(elements, token_pool)? { continue; }
+            
             // stat ::=  repeat block until exp |
             if self.process_statement_repeat_until(elements, token_pool)? { continue; } 
 
             // stat ::=  if exp then block {elseif exp then block} [else block] end | 
+            
             // stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
             // stat ::=  for namelist in explist do block end | 
+            if self.process_for_loop(elements, token_pool)? { continue; }
 
             // stat ::=  function funcname funcbody | local function Name funcbody
             if self.process_function_definition(elements, token_pool)? { continue; }
@@ -192,12 +196,6 @@ impl<'a> Parser<'a> {
 
             break;
         }
-
-        /*println!("===");
-        for i in elements.iter() {
-            println!("   {}",i.i());
-        }*/
-        // println!("{}",elements.len());
 
         match elements.len() {
             1 => Ok(elements.remove(0)),
@@ -329,102 +327,7 @@ impl<'a> Parser<'a> {
 
         Ok(())    
     }
-/*
-    fn get_tokens_until_token_2(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>, token : Token, starting_token : Option<Token>) -> Result<(),Error> {
-        //! will return all the tokens (including semicolons) until it finds the supplied token.
-        //! if nesting then it will make sure to count open and closed tokens
 
-        // we set the starting nest, if we are given a starting token that means we will
-        // be nesting, so we should start from zero. we start counting at the beginning of
-        // the element stream so we will count our starting token.
-        let mut nest_level : usize = if starting_token.is_some() { 0 } else { 1 };
-
-        // first we check the in element stream
-        for i in 0 .. elements.len() {
-            if let Some(element_token) = elements[i].i().get_token() {
-                // check if the token is the one we are looking for.
-                if element_token == &token { 
-                    if nest_level == 0 {
-                        // error here because we'll get a rust error (because we can't do 0-1 of usize)
-                        return Err(ParserError::unterminated(&self, 
-                            elements[0].line_number(), elements[0].code_start(),
-                            elements[0].code_end(),&format!("can't find the '{}' to close the phrase",token))
-                        );
-                    } 
-                    // decrement the level
-                    nest_level -= 1; 
-                } else if let Some(ref starting_token) = starting_token {
-                    // if we gave it a starting token lets count up
-                    if element_token == &starting_token { nest_level += 1; }
-                } 
-            }
-        }
-
-        // after we went through all that, lets see if we're ok
-        if nest_level == 0 { return Ok (()); }
-
-        // we are going to assume that we should be adding a semicolon at the end of this.
-        // this will revent errors moving forward (probably). we will cheat because we don't
-        // have the metadata for this thing, so we will attempt to remake it.
-        {
-            let code_start = elements[elements.len()-1].code_end();
-            let line_number = elements[elements.len()-1].line_number();
-            let code_end = code_start + 1;
-
-            elements.push(Element::codeelement_from_token(CodeRef{
-                item : Token::SemiColon,
-                code_start, code_end, line_number
-            }));
-        }
-
-        let mut nesting_stack : Vec<Token> = Vec::new();
-
-        loop {
-            // makes sure we still have tokens left to loop through.
-            if token_pool.len() == 0 { 
-                return Err(ParserError::unterminated(&self, 
-                    elements[0].line_number(), elements[0].code_start(),
-                    elements[0].code_end(),&format!("can't find the '{}' to close the phrase",token))
-                );
-            }
-
-            let popped_token = token_pool.remove(0);
-
-            // we check against the starting 
-
-
-            // stores the result of the final done check.
-            let done = {
-                if let Some(ref starting_token) = starting_token {
-                    // checks the nesting tokens
-                    if popped_token == token {
-                        nest_level -= 1;
-                    } else {
-                        if popped_token == starting_token {
-                            nest_level += 1;
-                        }
-                    }
-
-                    nest_level == 0
-                } else {
-                    // if we are not nesting all we care about is if 
-                    // we find the token.
-                    popped_token == token
-                }
-            };
-
-            if popped_token != Token::WhiteSpace {
-                elements.push(Element::codeelement_from_token(popped_token));
-            }
-
-            // finally checks if we are done.
-            if done { break; }
-
-        }
-
-        Ok(())
-    }
-*/
     // checking functions
     fn process_comment(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         if elements.len() >= 2 {
@@ -444,6 +347,8 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed comment");
 
                 return Ok(true);
             }
@@ -518,6 +423,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed explist");
+
                 return Ok(true);
             }
         }
@@ -549,6 +457,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed var(3)");
+
                 return Ok(true);
             }
         }}
@@ -574,6 +485,9 @@ impl<'a> Parser<'a> {
                 elements.insert(i, CodeRef {
                     item, code_start, code_end, line_number
                 });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed var(2)");
 
                 return Ok(true);
             }
@@ -653,6 +567,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed var list");
+
                 return Ok(true);
             }
         }
@@ -730,6 +647,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed name list");
+
                 return Ok(true);
             }
         }
@@ -757,6 +677,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed args");
+
                 return Ok(true);
             }
         }}
@@ -780,6 +703,9 @@ impl<'a> Parser<'a> {
                 elements.insert(i, CodeRef {
                     item, code_start, code_end, line_number
                 });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed function");
 
                 return Ok(true);
 
@@ -816,6 +742,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed funcbody");
+
                 return Ok(true);
             }
         }}
@@ -842,6 +771,9 @@ impl<'a> Parser<'a> {
                 elements.insert(i, CodeRef {
                     item, code_start, code_end, line_number
                 });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed parlist");
 
                 return Ok(true);
             }
@@ -876,6 +808,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed function call (4)");
+
                 return Ok(true);
             }
         }}
@@ -895,6 +830,9 @@ impl<'a> Parser<'a> {
                 elements.insert(i, CodeRef {
                     item, code_start, code_end, line_number
                 });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed function call (2)");
 
                 return Ok(true);
             }
@@ -926,6 +864,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed prefixexp");
+
                 return Ok(true);
             }
         }}
@@ -951,6 +892,9 @@ impl<'a> Parser<'a> {
 
                 statement.insert(i, CodeRef { item, code_end, code_start, line_number });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed binop");
+
                 return Ok(true);
             }
         }}
@@ -973,6 +917,10 @@ impl<'a> Parser<'a> {
                 let item = Element::create(vec![op], vec![exp])?;
 
                 statement.insert(i, CodeRef { item, code_end, code_start, line_number });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed unop");
+
                 return Ok(true);
             }
         }}
@@ -1006,6 +954,9 @@ impl<'a> Parser<'a> {
                         code_start, code_end, line_number
                     });
 
+                    #[cfg(feature = "dev-testing")]
+                    println!(".. processed 'statement assignment'");
+                    
                     return Ok(true);
                 }
             }
@@ -1034,6 +985,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed statement local assignment (2)");
+
                 return Ok(true);
             }
         }
@@ -1060,9 +1014,151 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed statement local assignment (4)");
+
                 return Ok(true);
             }
         }
+
+        Ok(false)
+    }
+
+    fn process_for_loop(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
+        //! stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
+        //! stat ::=  for namelist in explist do block end | 
+
+        if elements[0].i().matches_token(Token::For) {
+            self.get_tokens_until_token(elements, token_pool, Token::End)?;
+
+            let for_token = elements.remove(0);
+            let end_token = elements.remove(elements.len()-1);
+            let (do_token, block) = {
+                let mut do_pos : usize = 0;
+                    
+                loop {
+                    // finding the 'do' element in the phrase
+
+                    if do_pos >= elements.len() { 
+                        return Err(ParserError::unexpected(self,
+                            elements[do_pos-1].line_number(),
+                            elements[do_pos-1].code_start(),
+                            elements[do_pos-1].code_end(),
+                            "must have a 'do' element when using a for loop"
+                        ));
+                    }
+
+                    if elements[do_pos].i().matches_token(Token::Do) {
+                        break;
+                    }
+
+                    do_pos += 1;
+                }
+
+                let block = self.process(elements.drain(do_pos + 1 ..).collect())?;
+                let do_token = elements.remove(do_pos);
+
+                (do_token, block)
+            };
+
+            // we did everything we can for the shared space between the two, now we need to figure 
+            // out which direction to go
+            if let Some(pos) = Parser::contains_token(&elements, Token::In) {
+                // for <<namelist in explist>> do block end
+
+                let name_list = {
+                    let mut blank_pool : Vec<CodeToken> = Vec::new();
+                    let mut insides : Vec<CodeElement> = elements.drain(.. pos).collect();
+                    self.parse(&mut insides, &mut blank_pool)?
+                };
+                let in_token = elements.remove(0);
+                let exp_list = {
+                    let mut blank_pool : Vec<CodeToken> = Vec::new();
+                    let mut insides : Vec<CodeElement> = elements.drain(..).collect();
+                    self.parse(&mut insides, &mut blank_pool)?
+                };
+
+                if !name_list.i().is_name_list() {
+                    return Err(ParserError::unexpected(self, name_list.line_number(), name_list.code_start(), name_list.code_end(),
+                        "expected a namelist"));
+                }
+
+                if !exp_list.i().is_exp_list() {
+                    return Err(ParserError::unexpected(self, exp_list.line_number(), exp_list.code_start(), exp_list.code_end(),
+                        "expected an explist"));
+                }
+
+                let code_start = for_token.code_start();
+                let code_end = end_token.code_end();
+                let line_number = for_token.line_number();
+
+                let item = Element::create(
+                    vec![for_token,in_token,do_token,end_token], 
+                    vec![name_list,exp_list,block]
+                )?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed for-in-loop");
+                
+                return Ok(true);
+
+            } else if let Some(pos) = Parser::contains_token(&elements, Token::Equal) {
+                // for <<Name `=´ exp `,´ exp [`,´ exp]>> do block end | 
+                println!("equal");
+            } else {
+                return Err(ParserError::unexpected(self, for_token.line_number(), for_token.code_start(), for_token.code_end(),
+                    "expected either an 'in' phrase or a '=' phrase for this for-loop"));
+            }
+
+        }
+
+        /*
+
+        if elements.len() >= 4 { 
+            if elements[0].i().matches_token(Token::For)
+            && elements[1].i().is_name_list()
+            && elements[2].i().matches_token(Token::In)
+            && elements[3].i().is_exp_list() {
+
+                println!("{}",elements[3]);
+
+                let for_token = elements.remove(0);
+                let name_list = elements.remove(0);
+                let in_token = elements.remove(0);
+                let exp_list = elements.remove(0);
+                let do_token = elements.remove(0);
+                let end_token = elements.remove(elements.len()-1);
+
+                println!("{}",for_token);
+                println!("{}",in_token);
+                println!("{}",do_token);
+                println!("{}",end_token);
+
+                let block = self.process(elements.drain(..).collect())?;
+
+                let code_start = for_token.code_start();
+                let code_end = end_token.code_end();
+                let line_number = for_token.line_number();
+
+                let item = Element::create(
+                    vec![for_token,in_token,do_token,end_token], 
+                    vec![name_list,exp_list,block]
+                )?;
+
+                elements.insert(0,CodeRef{
+                    item, code_start, code_end, line_number
+                });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed for loop, namelist");
+
+                return Ok(true);
+            }
+        }*/
 
         Ok(false)
     }
@@ -1091,92 +1187,157 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed function definition (local)");
+
                 return Ok(true);
 
             }
         }}
         
-        // stat ::=  function funcname funcbody | 
-        if elements.len() >= 0 { 
-            if elements[0].i().matches_token(Token::Function) {
-                self.get_tokens_until_token(elements, token_pool, Token::End)?;
+        // stat ::=  function funcname funcbody |
+        if elements[0].i().matches_token(Token::Function) {
+            self.get_tokens_until_token(elements, token_pool, Token::End)?;
 
-                let (start_of_funcbody, end_of_funcbody) = {
-                    let mut pos = 0;
-                    let mut end = 0;
-                    for j in 0 .. elements.len() {
-                        if elements[j].i().matches_token(Token::LeftParen) {
-                            pos = j-1;
-                        }
-                        if elements[j].i().matches_token(Token::RightParen) {
-                            end = j;
-                            break;
-                        }
+            let (start_of_funcbody, end_of_funcbody) = {
+                let mut pos = 0;
+                let mut end = 0;
+                for j in 0 .. elements.len() {
+                    if elements[j].i().matches_token(Token::LeftParen) {
+                        pos = j-1;
                     }
-                    (pos, end)
+                    if elements[j].i().matches_token(Token::RightParen) {
+                        end = j;
+                        break;
+                    }
+                }
+                (pos, end)
+            };
+
+            let function = elements.remove(0);
+            let final_end = elements.remove(elements.len()-1);
+
+            // a hack to build the funcbody object.
+            let funcbody = {
+                let funcbody = self.process(elements.drain(end_of_funcbody .. ).collect())?;
+                let parmaarea = {
+                    let mut param : Vec<CodeToken> = elements.drain(start_of_funcbody + 1 ..  elements.len() - 1).collect();
+                    let mut temp_elements = Parser::get_next_statement(&mut param).unwrap();
+                    self.parse(&mut temp_elements, &mut param)?
                 };
-
-                let function = elements.remove(0);
-                let final_end = elements.remove(elements.len()-1);
-
-                // a hack to build the funcbody object.
-                let funcbody = {
-                    let funcbody = self.process(elements.drain(end_of_funcbody .. ).collect())?;
-                    let parmaarea = {
-                        let mut param : Vec<CodeToken> = elements.drain(start_of_funcbody + 1 ..  elements.len() - 1).collect();
-                        let mut temp_elements = Parser::get_next_statement(&mut param).unwrap();
-                        self.parse(&mut temp_elements, &mut param)?
-                    };
-                    
-                    if !funcbody.i().is_block() {
-                        return Err(ParserError::unexpected(&self, funcbody.line_number(), funcbody.code_start(), funcbody.code_end(),
-                            "expected a function body here."));
-                    }
-                    if !parmaarea.i().is_par_list() {
-                        return Err(ParserError::unexpected(&self, parmaarea.line_number(), parmaarea.code_start(), parmaarea.code_end(),
-                            "expected function parmeters here."));
-                    }
-
-                    let right = elements.remove(elements.len()-1);
-                    let left = elements.remove(elements.len()-1);
-
-                    let code_start = left.code_start();
-                    let code_end = final_end.code_end();
-                    let line_number = left.line_number();
-
-                    let item = Element::create(vec![left,right,final_end], vec![parmaarea,funcbody])?;
-
-                    CodeRef{ item, code_start, code_end, line_number }
-                };
-
-                if !funcbody.i().is_func_body() {
+                
+                if !funcbody.i().is_block() {
                     return Err(ParserError::unexpected(&self, funcbody.line_number(), funcbody.code_start(), funcbody.code_end(),
                         "expected a function body here."));
                 }
-
-                let funcname = {
-                    let mut funcname : Vec<CodeToken> = elements.drain(..).collect();
-                    let mut temp_elements = Parser::get_next_statement(&mut funcname).unwrap();
-                    self.parse(&mut temp_elements, &mut funcname)?
-                };
-
-                if !funcname.i().is_func_name() {
-                    return Err(ParserError::unexpected(&self, funcname.line_number(), funcname.code_start(), funcname.code_end(),
-                        "expected a function name here."));
+                if !parmaarea.i().is_par_list() {
+                    return Err(ParserError::unexpected(&self, parmaarea.line_number(), parmaarea.code_start(), parmaarea.code_end(),
+                        "expected function parmeters here."));
                 }
 
-                let code_start = function.code_start();
-                let code_end = funcbody.code_end();
-                let line_number = function.line_number();
+                let right = elements.remove(elements.len()-1);
+                let left = elements.remove(elements.len()-1);
 
-                let item = Element::create(vec![function], vec![funcname,funcbody])?;
+                let code_start = left.code_start();
+                let code_end = final_end.code_end();
+                let line_number = left.line_number();
+
+                let item = Element::create(vec![left,right,final_end], vec![parmaarea,funcbody])?;
+
+                CodeRef{ item, code_start, code_end, line_number }
+            };
+
+            if !funcbody.i().is_func_body() {
+                return Err(ParserError::unexpected(&self, funcbody.line_number(), funcbody.code_start(), funcbody.code_end(),
+                    "expected a function body here."));
+            }
+
+            let funcname = {
+                let mut funcname : Vec<CodeToken> = elements.drain(..).collect();
+                let mut temp_elements = Parser::get_next_statement(&mut funcname).unwrap();
+                self.parse(&mut temp_elements, &mut funcname)?
+            };
+
+            if !funcname.i().is_func_name() {
+                return Err(ParserError::unexpected(&self, funcname.line_number(), funcname.code_start(), funcname.code_end(),
+                    "expected a function name here."));
+            }
+
+            let code_start = function.code_start();
+            let code_end = funcbody.code_end();
+            let line_number = function.line_number();
+
+            let item = Element::create(vec![function], vec![funcname,funcbody])?;
+
+            elements.insert(0,CodeRef{
+                item, code_start, code_end, line_number
+            });
+
+            #[cfg(feature = "dev-testing")]
+            println!(".. processed function definition");
+
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    fn process_while_do(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
+
+        if elements.len() > 0 {
+            if elements[0].i().matches_token(Token::While) {
+                self.get_tokens_until_token(elements, token_pool, Token::End)?;
+
+                let while_token = elements.remove(0);
+                let end_token = elements.remove(elements.len()-1);
+                let (condition, do_token, block) = {
+                    let mut do_pos : usize = 0;
+                    
+                    loop {
+                        // finding the 'do' element in the phrase
+
+                        if do_pos >= elements.len() { 
+                            return Err(ParserError::unexpected(self,
+                                elements[do_pos-1].line_number(),
+                                elements[do_pos-1].code_start(),
+                                elements[do_pos-1].code_end(),
+                                "must have a 'do' element when using a while"
+                            ));
+                        }
+
+                        if elements[do_pos].i().matches_token(Token::Do) {
+                            break;
+                        }
+
+                        do_pos += 1;
+                    }
+
+                    let insides : Vec<CodeToken> = elements.drain(do_pos + 1 ..).collect();
+                    let block = self.process(insides)?;
+                    let do_token : CodeElement = elements.remove(do_pos);
+
+                    let mut bank : Vec<CodeToken> = Vec::new();
+                    let condition = self.parse(elements, &mut bank)?;
+
+                    (condition, do_token, block)
+                };
+
+                let code_start = while_token.code_start();
+                let code_end = end_token.code_end();
+                let line_number = while_token.line_number();
+
+                let item = Element::create(
+                    vec![while_token, do_token, end_token], 
+                    vec![condition, block])?;
 
                 elements.insert(0,CodeRef{
                     item, code_start, code_end, line_number
                 });
 
-                return Ok(true);
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed while-do");
 
+                return Ok(true);
             }
         }
 
@@ -1215,6 +1376,9 @@ impl<'a> Parser<'a> {
                 elements.insert(0,CodeRef{
                     item, code_start, code_end, line_number
                 });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed repeat-until");
 
                 return Ok(true);
             }
@@ -1257,7 +1421,10 @@ impl<'a> Parser<'a> {
                 elements.insert(0,CodeRef{
                     item, code_start, code_end, line_number
                 });
-
+                
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed do-end");
+                
                 return Ok(true);
             }
         }
@@ -1288,6 +1455,9 @@ impl<'a> Parser<'a> {
                         item, code_start, code_end, line_number
                     });
 
+                    #[cfg(feature = "dev-testing")]
+                    println!(".. processed last statement (0)");
+
                     return Ok(true)
                 }
             }
@@ -1309,10 +1479,11 @@ impl<'a> Parser<'a> {
                     elements.insert(0, CodeRef{
                         item, code_start, code_end, line_number
                     });
-
+                    
+                    #[cfg(feature = "dev-testing")]
+                    println!(".. processed last statement");
+                    
                     return Ok(true)
-
-
                 }
             }
         }
@@ -1357,6 +1528,9 @@ impl<'a> Parser<'a> {
                 elements.insert(i, CodeRef {
                     item, code_end, code_start, line_number
                 });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed table const");
 
                 return Ok(true);
             }
@@ -1431,6 +1605,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed field list");
+
                 return Ok(true);
             }
         }
@@ -1466,6 +1643,9 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed field (5)");
+
                 return Ok(true);
             }
 
@@ -1491,12 +1671,25 @@ impl<'a> Parser<'a> {
                     item, code_start, code_end, line_number
                 });
 
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed field (3)");
+
                 return Ok(true);
             }
         }}
 
 
         Ok(false)
+    }
+
+    fn contains_token(list : &Vec<CodeElement>, token : Token) -> Option<usize> {
+        //! checks the list if it contains a certain token
+
+        for i in 0 .. list.len() {
+            if list[i].i().matches_token(&token) { return Some(i); }
+        }
+
+        None
     }
 
 }
@@ -1519,6 +1712,15 @@ mod tests {
         jim = 3 + bob.x
         local bob,jim,mary = 1,2+3,(4*5)
         local bob
+
+        while bob >= 4 do
+            -- this is the inside of the loop
+            bob = bob + 3
+        end
+
+        for i,v in pairs(table) do
+            print(i,v)
+        end
 
         function test2(a,s)
             -- this doesn't do anything either!!!
