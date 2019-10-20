@@ -76,7 +76,12 @@ impl<'a> Parser<'a> {
         // now we need to check if we can build a chunk and block out of the working_phrase
         for i in 0 .. working_phrase.len() - 1 {
             // checking all but the last element if it is a statement.
+
             if !working_phrase[i].i().is_statement() {
+
+                #[cfg(feature = "dev-testing")]
+                println!("{}",working_phrase[i].i().pretty_print());
+
                 return Err(ParserError::not_a_statement(&self,
                     working_phrase[i].line_number(), 
                     working_phrase[i].code_start(),
@@ -90,6 +95,10 @@ impl<'a> Parser<'a> {
             || working_phrase[working_phrase.len()-1].i().is_last_statement()
         ) {
             let pos = working_phrase.len()-1;
+
+            #[cfg(feature = "dev-testing")]
+            println!("{}",working_phrase[pos].i().pretty_print());
+
             return Err(ParserError::not_a_statement(&self,
                 working_phrase[pos].line_number(),
                 working_phrase[pos].code_start(),
@@ -138,6 +147,7 @@ impl<'a> Parser<'a> {
             if self.process_statement_repeat_until(elements, token_pool)? { continue; } 
 
             // stat ::=  if exp then block {elseif exp then block} [else block] end | 
+            if self.process_if_loop(elements, token_pool)? { continue; }
             
             // stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
             // stat ::=  for namelist in explist do block end | 
@@ -310,7 +320,7 @@ impl<'a> Parser<'a> {
             cursor += 1;
 
             // we are also checking against the original length, because we
-            // need to first capture the openning token, we might be too early
+            // need to first capture the opening token, we might be too early
             // in the phrase and there could be other tokens infront that would
             // cause us to break before we want to.
             if nesting_stack.len() == 0 && cursor > original_length { break; }
@@ -1023,6 +1033,110 @@ impl<'a> Parser<'a> {
 
         Ok(false)
     }
+    fn process_if_loop(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
+        //! if exp then block {elseif exp then block} [else block] end
+
+        if elements[0].i().matches_token(Token::If) {
+            self.get_tokens_until_token(elements, token_pool, Token::End)?;
+
+            let if_token = elements.remove(0);
+            let end_token = elements.remove(elements.len()-1);
+            let mut empty_pool : Vec<CodeToken> = Vec::new();
+
+            let code_start = if_token.code_start();
+            let code_end = end_token.code_end();
+            let line_number = if_token.line_number();
+
+            let (then_token, exp) = if let Some(pos) = Parser::contains_token(elements, Token::Then) {
+                let mut insides : Vec<CodeElement> = elements.drain(.. pos).collect();
+                let exp = self.parse(&mut insides, &mut empty_pool)?;
+
+                (elements.remove(0), exp)
+            } else {
+                return Err(ParserError::unexpected(self, if_token.line_number(), if_token.code_start(), end_token.code_end(),
+                    "a if-then-end requires a `then`"));
+            };
+
+            let mut toks : Vec<CodeElement> = vec![if_token, then_token];
+            let mut elms : Vec<CodeElement> = vec![exp];
+
+            let mut working : Vec<CodeToken> = Vec::new();
+            // now we need to figure out where the block ends, we coul;d have an `elseif`, and `else` or nothing at all.
+            // we'll do this by reading through the remaining elements in a loop until we've got everything done.
+            // if exp then block {elseif exp then block} [else block] end
+
+            loop {
+                if elements.len() == 0 { break; }
+
+                let token = elements.remove(0);
+
+                match token.i().get_token() {
+                    Some(CodeRef { item : Token::Elseif, .. }) => { 
+                        // the working stuff should be a block
+                        let block = self.process(working)?;
+                        working = Vec::new();
+
+                        toks.push(token);
+                        elms.push(block);
+                    },
+                    Some(CodeRef { item : Token::Else, .. }) => { 
+                        // the working stuff should be a block
+                        let block = self.process(working)?;
+                        working = Vec::new();
+
+                        toks.push(token);
+                        elms.push(block);
+                    },
+                    Some(CodeRef { item : Token::Then, .. }) => { 
+                        // before a `then` is always some kind of condition
+                        let mut insides : Vec<CodeElement> = working.drain(..).collect();
+                        let exp = self.parse(&mut insides, &mut empty_pool)?;
+
+                        elms.push(exp);
+                    },
+                    Some(_) => {
+                        // this is safe because we needed to get here from
+                        // .get_token() which can only return Some(_) from
+                        // a token.
+                        working.push(token.unwrap().consume_to_token().unwrap());
+                    },
+                    None => {
+                        return Err(ParserError::unexpected(self, token.line_number(), token.code_start(), token.code_end(),
+                            "unexpected item"));     
+                    }
+                }
+
+                if elements.len() == 0 {
+                    // doing it here also so we can keep the code for this inside the loop,
+                    // and not have a weird block at the end of the loop
+                    // effectively we are checking 2x every iteration of the loop, but 
+                    // i'm ok with that right now. TODO : probably can clean this up
+                    if working.len() > 0 {
+                        // the working stuff should be a block
+                        let block = self.process(working)?;
+                        working = Vec::new();
+
+                        elms.push(block);
+                    }
+                }
+            }
+
+            toks.push(end_token);
+            let item = Element::create(toks,elms)?;
+
+            elements.insert(0,CodeRef{
+                item, code_start, code_end, line_number
+            });
+
+            #[cfg(feature = "dev-testing")]
+            println!(".. processed if-then-else");
+
+            return Ok(true);
+        }
+    
+
+        Ok(false)
+    }
 
     fn process_for_loop(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
         //! stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
@@ -1141,7 +1255,7 @@ impl<'a> Parser<'a> {
                     return Err(ParserError::unexpected(self, exp2.line_number(), exp2.code_start(), exp2.code_end(),
                         "expected expression"));    
                 }
-                println!("{}",elements.len());
+
                 if elements.len() != 0 && elements.len() != 2 {
                     return Err(ParserError::unexpected(self, elements[0].line_number(), elements[0].code_start(), elements[elements.len()-1].code_end(),
                         "expected either nothing, or `, exp`"));    
@@ -1772,6 +1886,17 @@ mod tests {
             -- this doesn't do anything either!!!
             print('test')
         end
+
+        if bob == 1 then
+            bob =  bob + 1
+        elseif op == "a" then
+            print("not here")
+        elseif bob < 3 and bob > 3 then
+            bob = "not possible"
+        else
+            error("this is a problem")
+        end
+
 
         local aTestFunction = function (q,w,e,r,t,...)
             -- this function does some cool stuff,

@@ -47,6 +47,25 @@ impl std::fmt::Display for Element {
     }
 }
 
+impl std::iter::FromIterator<CodeToken> for Vec<CodeElement> {
+    fn from_iter<I : IntoIterator<Item=CodeToken>>(iter : I) -> Self {
+        //! takes an iterator of `CodeElement` and converts it to straight
+        //! tokens, needs to be careful because this will not work unless
+        //! these items are actually tokens, it create and inject dummy
+        //! bad tokens if the element isn't a token (this can create problems).
+        //! so be sure to use this only where you know what the element stream
+        //! is.
+
+        let mut element_vec : Vec<CodeElement> = Vec::new();
+
+        for token in iter {
+            element_vec.push(Element::codeelement_from_token(token));
+        }
+
+        element_vec
+    }
+}
+
 impl Element {
 	pub fn new() -> Element {
 		Element {
@@ -764,6 +783,22 @@ impl Element {
 		}
 		false		
 	}
+
+    pub fn pretty_print(&self) -> String {
+        let mut text = String::new();
+
+        text += "Identifiers:\n";
+        for i in 0 .. self.identifiers.len() {
+            text = format!("{}   [{}] {}\n",text,i,self.identifiers[i].i());
+        }
+
+        text += "\nElements:\n";
+        for i in 0 .. self.elements.len() {
+            text = format!("{}   [{}] {}\n",text,i, self.elements[i].i());
+        }
+
+        text
+    }
 
 	// PRIVATE FUNCTIONS
 }

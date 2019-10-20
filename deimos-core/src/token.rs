@@ -144,6 +144,7 @@ impl Token {
         match self {
             Token::LeftMoustache => Some(Token::RightMoustache),
             Token::Do => Some(Token::End),
+            Token::If => Some(Token::End),
             Token::Repeat => Some(Token::Until),
             Token::Function => Some(Token::End),
             _ => None,
