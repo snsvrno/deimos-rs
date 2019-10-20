@@ -491,10 +491,11 @@ impl<'a> Scanner<'a> {
 #[cfg(test)]
 mod tests {
 
+    use crate::scanner::Scanner;
+
     #[test]
     #[ignore]
     pub fn test_failure() {
-        use crate::scanner::Scanner;
 
         let code : &str = r#"q,..."#;
 
@@ -510,6 +511,64 @@ mod tests {
         }
 
         assert!(false)
+    }
+
+    #[test]
+    pub fn scan_lua_test_suite() {
+        use std::fs::File;
+        use std::io::Read;
+        use std::str;
+
+        let file_names = vec![
+            // "all.lua", // fails because of #! is invalid rust, TODO : figure out what to do, if anything
+            "api.lua",
+            "attrib.lua",
+            "big.lua",
+            "calls.lua",
+            "checktable.lua",
+            "closure.lua",
+            "code.lua",
+            "constructs.lua",
+            // "db.lua", // fails because not UTF-8, has unicode? TODO : unicode support
+            "errors.lua",
+            "events.lua",
+            // "files.lua", // fails because not UTF-8, has unicode? TODO : unicode support
+            "gc.lua",
+            // "literals.lua", // fails because not UTF-8, has unicode? TODO : unicode support
+            "locals.lua",
+            "main.lua",
+            "math.lua",
+            "nextvar.lua",
+            // "pm.lua", // fails because not UTF-8, has unicode? TODO : unicode support
+            // "sort.lua", // fails because not UTF-8, has unicode? TODO : unicode support
+            // "strings.lua", // fails because not UTF-8, has unicode? TODO : unicode support
+            "vararg.lua",
+            "verybig.lua",
+        ];
+
+        // checks each of the test files, makes sure
+        // that we can read it without error
+        for file_name in file_names {
+            let code_stream : Vec<u8> = { 
+                // loads the contents of the file
+                let mut contents : Vec<u8> = Vec::new();
+                let mut file = File::open(&format!("../lua/{}",file_name)).expect(&format!("{}: can't open file",file_name));
+                file.read_to_end(&mut contents).expect(&format!("{}: can't read file",file_name));
+
+                contents
+
+            };
+
+            let code = match str::from_utf8(&code_stream) {
+                Ok(c) => c,
+                Err(error) =>  { println!("{}: {}",file_name,error); assert!(false); "" },
+            };
+
+            match Scanner::from_str(&code,Some(file_name)) {
+                Err(error) => { println!("{}: {}",file_name,error); assert!(false); }
+                Ok(_) => assert!(true),
+            }
+        }
     }
 
 }
