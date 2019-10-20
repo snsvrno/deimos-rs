@@ -1027,6 +1027,9 @@ impl<'a> Parser<'a> {
     fn process_for_loop(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<bool, Error> {
         //! stat ::=  for Name `=´ exp `,´ exp [`,´ exp] do block end | 
         //! stat ::=  for namelist in explist do block end | 
+        //! 
+        //! checks if we start off with a `for` and then continues working to find the right
+        //! pattern, does both for loops.
 
         if elements[0].i().matches_token(Token::For) {
             self.get_tokens_until_token(elements, token_pool, Token::End)?;
@@ -1106,47 +1109,77 @@ impl<'a> Parser<'a> {
                 
                 return Ok(true);
 
-            } else if let Some(pos) = Parser::contains_token(&elements, Token::Equal) {
+            } else if let Some(_) = Parser::contains_token(&elements, Token::Equal) {
                 // for <<Name `=´ exp `,´ exp [`,´ exp]>> do block end | 
-                println!("equal");
-            } else {
-                return Err(ParserError::unexpected(self, for_token.line_number(), for_token.code_start(), for_token.code_end(),
-                    "expected either an 'in' phrase or a '=' phrase for this for-loop"));
-            }
 
-        }
+                let name = elements.remove(0);
+                if !name.i().is_name() {
+                    return Err(ParserError::unexpected(self, name.line_number(), name.code_start(), name.code_end(),
+                        "expected a name"));    
+                }
 
-        /*
+                let eq_token = elements.remove(0);
+                if !eq_token.i().matches_token(Token::Equal) {
+                    return Err(ParserError::unexpected(self, eq_token.line_number(), eq_token.code_start(), eq_token.code_end(),
+                        "expected `=`"));    
+                }
 
-        if elements.len() >= 4 { 
-            if elements[0].i().matches_token(Token::For)
-            && elements[1].i().is_name_list()
-            && elements[2].i().matches_token(Token::In)
-            && elements[3].i().is_exp_list() {
+                let exp1 = elements.remove(0);
+                if !exp1.i().is_exp() {
+                    return Err(ParserError::unexpected(self, exp1.line_number(), exp1.code_start(), exp1.code_end(),
+                        "expected expression"));    
+                }
 
-                println!("{}",elements[3]);
+                let comma1 = elements.remove(0);
+                if !comma1.i().matches_token(Token::Comma) {
+                    return Err(ParserError::unexpected(self, comma1.line_number(), comma1.code_start(), comma1.code_end(),
+                        "expected `,`"));    
+                }
 
-                let for_token = elements.remove(0);
-                let name_list = elements.remove(0);
-                let in_token = elements.remove(0);
-                let exp_list = elements.remove(0);
-                let do_token = elements.remove(0);
-                let end_token = elements.remove(elements.len()-1);
-
-                println!("{}",for_token);
-                println!("{}",in_token);
-                println!("{}",do_token);
-                println!("{}",end_token);
-
-                let block = self.process(elements.drain(..).collect())?;
+                let exp2 = elements.remove(0);
+                if !exp2.i().is_exp() {
+                    return Err(ParserError::unexpected(self, exp2.line_number(), exp2.code_start(), exp2.code_end(),
+                        "expected expression"));    
+                }
+                println!("{}",elements.len());
+                if elements.len() != 0 && elements.len() != 2 {
+                    return Err(ParserError::unexpected(self, elements[0].line_number(), elements[0].code_start(), elements[elements.len()-1].code_end(),
+                        "expected either nothing, or `, exp`"));    
+                }
 
                 let code_start = for_token.code_start();
                 let code_end = end_token.code_end();
                 let line_number = for_token.line_number();
 
+                let mut exps : Vec<CodeElement> = vec![name, exp1, exp2];
+                let mut toks : Vec<CodeElement> = vec![for_token, eq_token, comma1];
+
+                if elements.len() == 2 {
+                    // gets the last section if defined.
+                    
+                    let comma = elements.remove(0);
+                    if !comma.i().matches_token(Token::Comma) {
+                        return Err(ParserError::unexpected(self, comma.line_number(), comma.code_start(), comma.code_end(),
+                            "expected `,`"));    
+                    }
+
+                    let exp = elements.remove(0);
+                    if !exp.i().is_exp() {
+                        return Err(ParserError::unexpected(self, exp.line_number(), exp.code_start(), exp.code_end(),
+                            "expected expression"));    
+                    }
+
+                    toks.push(comma);
+                    exps.push(exp);
+                }
+
+                exps.push(block);
+                toks.push(do_token);
+                toks.push(end_token);
+
                 let item = Element::create(
-                    vec![for_token,in_token,do_token,end_token], 
-                    vec![name_list,exp_list,block]
+                    toks, 
+                    exps
                 )?;
 
                 elements.insert(0,CodeRef{
@@ -1154,11 +1187,16 @@ impl<'a> Parser<'a> {
                 });
 
                 #[cfg(feature = "dev-testing")]
-                println!(".. processed for loop, namelist");
-
+                println!(".. processed for-=-loop");
+                
                 return Ok(true);
+
+            } else {
+                return Err(ParserError::unexpected(self, for_token.line_number(), for_token.code_start(), for_token.code_end(),
+                    "expected either an 'in' phrase or a '=' phrase for this for-loop"));
             }
-        }*/
+
+        }
 
         Ok(false)
     }
@@ -1720,6 +1758,14 @@ mod tests {
 
         for i,v in pairs(table) do
             print(i,v)
+        end
+
+        for b = 1,2 do
+            print(b)
+        end
+
+        for b = 1,20,2 do
+            print(b)
         end
 
         function test2(a,s)
