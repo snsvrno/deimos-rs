@@ -263,6 +263,8 @@ impl<'a> Scanner<'a> {
         // need to do this because rust will have a stack overflow if 
         // you try to parse a string as a float with more than 1 decimal
         let mut decimal_number : usize = if first == "." { 1 } else { 0 };
+        // to check if we found it in exponential formatting.
+        let mut exponent_format = false;  
 
         loop {
 
@@ -278,7 +280,26 @@ impl<'a> Scanner<'a> {
             if char == "." { decimal_number += 1; }
 
             match Token::is_valid_number_char(char) {
-                false => break,
+                false => match char {
+                    "e" | "E" => { 
+                        // if we find an e in the number, it might be a number still, we just can
+                        // only have 1 and can't have any decimal places anymore.
+                        if !exponent_format && decimal_number == 0 {
+                            pos += 1;
+                            number = format!("{}{}",number,char);
+                            exponent_format = true;
+                        } else {
+                            break
+                        }
+                    },
+                    "-" => {
+                        if exponent_format {
+                            pos += 1;
+                            number = format!("{}{}",number,char);
+                        } else { break; }
+                    }
+                    _ => break,
+                },
                 true => {
                     // adds the character to the working word
                     pos += 1; 
@@ -292,10 +313,22 @@ impl<'a> Scanner<'a> {
                 &format!("a number can't have more than 1 decimal point, found {}",decimal_number)));
         }
 
+        if decimal_number == 1 && exponent_format {
+            return Err(ScannerError::number_parsing(self,number.len(),
+                &format!("a number can't have more a decimal and be in exp format")));
+        }
+
         if number == "." { return Ok(None); }
 
         match number.parse::<f32>() {
-            Err(_) => Err(ScannerError::number_parsing(self,number.len(),"can't parse as number")),
+            Err(_) => { 
+                #[cfg(feature = "dev-testing")]
+                {
+                    println!("attempted to parse : {}",number);
+                }
+
+                Err(ScannerError::number_parsing(self,number.len(),"can't parse as number")) 
+            },
             Ok(num) =>  {
                 self.cursor_pos = pos;
                 Ok(Some(Token::Number(num)))
