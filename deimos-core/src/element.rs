@@ -124,6 +124,19 @@ impl Element {
 		self.elements.push(Box::new(element));
 	}
 
+    pub fn statements_iter(&self) -> Vec<&CodeElement> {
+        let mut statements : Vec<&CodeElement> = Vec::new();
+
+        if self.is_block() {
+            let Element { identifiers : _, ref elements } = self;
+            for i in elements {
+                statements.push(&i);
+            }
+        }
+
+        return statements;
+    }
+
 	// THE SYNTAX FUNCTIONS ////////////////////////////////////////
 	// this section of code takes the lua specification (duplicated in LUA-SPEC.md)
 	// and implements checks on the element struct.
