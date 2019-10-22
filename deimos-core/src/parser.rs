@@ -128,7 +128,10 @@ impl<'a> Parser<'a> {
     fn parse(&mut self, elements : &mut Vec<CodeElement>, token_pool : &mut Vec<CodeToken>) -> Result<CodeElement, Error> {
 
         #[cfg(feature = "dev-testing")]
-        println!(".. running parse");
+        {
+            println!(".. running parse");
+            for e in elements.iter() { println!(".... {}",e.i()); } 
+        }
 
         loop {
             
@@ -281,6 +284,13 @@ impl<'a> Parser<'a> {
         loop {
             // checks if we run out of runway
             if cursor >= elements.len() { 
+
+                // if we are done and our nesting is 0, that must mean whatever started
+                // nesting already finished (like it was all done on one line, the original
+                // line) so lets just go home
+                if original_length == elements.len() {
+                    return Ok(());
+                }
 
                 // first we check for the semicolon hack
                 if !added_semicolon {
@@ -1713,29 +1723,49 @@ impl<'a> Parser<'a> {
             if elements[i].i().matches_token(Token::LeftMoustache) {
                 self.get_tokens_until_token(elements, token_pool, Token::RightMoustache)?;
 
-                // we are going to pull out the insides for processing
-                let mut insides : Vec<CodeElement> = elements.drain(i+1 .. elements.len()-1).collect();
-                let mut pool : Vec<CodeToken> = Vec::new();
-                // and we parse the insides separately
-                let processed_insides = self.parse(&mut insides, &mut pool)?;
-                // now we check it worked out 
-                if !processed_insides.i().is_field_list() {
-                    return Err(ParserError::unexpected(&self,
-                        processed_insides.line_number(),
-                        processed_insides.code_start(),
-                        processed_insides.code_end(),
-                        "expected a field list here."
-                    ));
-                }
-                
+                // gets the insides of the table constructor, to pull out for processing
+                let (insides, pos) = match Parser::contains_token(elements, Token::RightMoustache) {
+                    Some(position) => {
+                        if position - i > 1 {
+                            // if position -i > 1 then we actually have something inside here, we might 
+                            // just have a space though .. ?
+
+                            let mut insides : Vec<CodeElement> = elements.drain(i + 1 .. position).collect();
+                            let mut pool : Vec<CodeToken> = Vec::new();// and we parse the insides separately
+                            let processed_insides = self.parse(&mut insides, &mut pool)?;
+
+                            // now we check it worked out 
+                            if !processed_insides.i().is_field_list() {
+                                return Err(ParserError::unexpected(&self,processed_insides.line_number(),processed_insides.code_start(),
+                                    processed_insides.code_end(),"expected a field list here."
+                                ));
+                            }
+
+                            (Some(processed_insides), position)
+                        } else {
+                            // its an empty table constructor.
+                            
+                            (None, position)   
+                        }
+                    },
+                    None => {
+                        return Err(ParserError::unexpected(&self,elements[i].line_number(),elements[i].code_start(),
+                            elements[i].code_end(),"expected a '}' to close this."
+                        ));
+                    },                    
+                };
+             
+                let right = elements.remove(pos);   
                 let left = elements.remove(i);
-                let right = elements.remove(elements.len()-1);
 
                 let code_start = left.code_start();
                 let code_end = right.code_end();
                 let line_number = left.line_number();
 
-                let item = Element::create(vec![left, right], vec![processed_insides])?;
+                let item = match insides {
+                    Some(insides) => Element::create(vec![left, right], vec![insides])?,
+                    None => Element::create(vec![left, right], vec![])?
+                };
 
                 elements.insert(i, CodeRef {
                     item, code_end, code_start, line_number
@@ -1916,100 +1946,7 @@ mod tests {
         use crate::parser::Parser;
 
         let code : &str = r#"
-        -- comment here
-        a.b.c.d:e()
-        x = 1 + - 2
-        x,y = 2,3
-        tabletest = { a = 1; b = 2; c = 2+3, ["return"] = 4; }
-        bob[x] = 4
-        jim = 3 + bob.x
-        local bob,jim,mary = 1,2+3,(4*5)
-        local bob
-
-        while bob >= 4 do
-            -- this is the inside of the loop
-            bob = bob + 3
-
-            do
-                -- this is nested
-                bob = bob + 3 - 4 * 3
-            end
-        end
-
-        for i,v in pairs(table) do
-            print(i,v)
-        end
-
-        for b = 1,2 do
-            print(b)
-        end
-
-        for b = 1,20,2 do
-            print(b)
-        end
-
-        function test2(a,s)
-            -- this doesn't do anything either!!!
-            print('test')
-        end
-
-        if bob == 1 then
-            bob =  bob + 1
-        elseif op == "a" then
-            print("not here")
-        elseif bob < 3 and bob > 3 then
-            bob = "not possible"
-        else
-            error("this is a problem")
-        end
-
-
-        local aTestFunction = function (q,w,e,r,t,...)
-            -- this function does some cool stuff,
-            -- you should really check it out!!
-
-            --[[ this is another comment
-            just to make sure it all really works in the 
-            end
-            ]]--
-
-            q = w + e + r
-            y = 10
-
-            return q,w,e,r,t,y
-        end
-
-        a.b.c.d()
-        a.b.c:d()
-
-        do
-            x = 5
-            repeat 
-                x = x + 1
-                x = x - 1
-                x = x + 1
-            until
-                x >= 10
-        end
-
-        repeat
-            x = x + 1
-            do
-                local bob = 10
-                bob:hiddenFunction("other stuff")
-                print("this is the bob" .. bob)
-                add(1,2,3,4)
-            end
-        until x >= 10
-
-        repeat
-            y = y + 1
-            local othervar = 10
-            y = y + othervar
-        until 
-            y >= 100
-
-        return (2 + 3)
+            assert(tonumber{ } == nil)        
         "#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua")).unwrap();
@@ -2019,7 +1956,7 @@ mod tests {
             Ok(parser) => { 
                 let blocks = parser.blocks.unwrap();
                 for statement in blocks.i().statements_iter() {
-                    println!("function call : {}",statement.i().is_function_call()); 
+                    println!("{}",statement.i()); 
                 }
             },
             Err(error) => { println!("{}",error); assert!(false); },
@@ -2027,6 +1964,7 @@ mod tests {
 
     }
 
+    #[ignore]
     #[test]
     pub fn scan_lua_test_suite() {
         use std::fs::File;
