@@ -288,7 +288,7 @@ impl<'a> Parser<'a> {
                 // if we are done and our nesting is 0, that must mean whatever started
                 // nesting already finished (like it was all done on one line, the original
                 // line) so lets just go home
-                if original_length == elements.len() {
+                if original_length == elements.len() && nesting_stack.len() == 0 {
                     return Ok(());
                 }
 
@@ -357,6 +357,7 @@ impl<'a> Parser<'a> {
                     // to the stack
                     if !first_part { nesting_stack.append(&mut ending) }; 
                 }
+                println!("//[{}] {}",nesting_stack.len(), element_token);
 
             }
 
@@ -1946,7 +1947,9 @@ mod tests {
         use crate::parser::Parser;
 
         let code : &str = r#"
-            assert(tonumber{ } == nil)        
+            do
+                bob = 1
+            end    
         "#;
 
         let scanner = Scanner::from_str(code,Some("testfile.lua")).unwrap();
@@ -1964,7 +1967,6 @@ mod tests {
 
     }
 
-    #[ignore]
     #[test]
     pub fn scan_lua_test_suite() {
         use std::fs::File;
