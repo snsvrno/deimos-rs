@@ -163,6 +163,7 @@ impl<'a> Parser<'a> {
             if Parser::process_last_statement(elements)? { continue; }
             
             // funcname ::= Name {`.´ Name} [`:´ Name]
+            // if Parser::process_functionname(elements)? { continue; }
 
             // varlist ::= var {`,´ var}
             if Parser::process_var_list(elements)? { continue; }
@@ -210,9 +211,20 @@ impl<'a> Parser<'a> {
         match elements.len() {
             1 => Ok(elements.remove(0)),
             0 => return Err(ParserError::general("parser found an empty statement?")),
-            _ => return Err(ParserError::not_a_statement(&self,
-                elements[0].line_number(), elements[0].code_start(),
-                elements[elements.len()-1].code_end()))
+            _ => {
+
+                #[cfg(feature = "dev-testing")]
+                {
+                    for i in 0 .. elements.len() {
+                        println!("== PART #{} ==",i);
+                        println!("{}",elements[i].i().pretty_print());
+                    }
+                }
+
+                return Err(ParserError::not_a_statement(&self,
+                    elements[0].line_number(), elements[0].code_start(),
+                    elements[elements.len()-1].code_end()))
+            }
         }
     }
 
@@ -269,8 +281,16 @@ impl<'a> Parser<'a> {
         loop {
             // checks if we run out of runway
             if cursor >= elements.len() { 
+
                 // first we check for the semicolon hack
                 if !added_semicolon {
+                    // if we haven't added the semicolon yet we should add it to the 
+                    // end of the phrase, this is because we removed the semicolon when
+                    // we originally poped this element phrase, and now we are going to be
+                    // adding tokens to the end of it, so we need to separate it from 
+                    // something else. the added semicolon doesn't effect anything else 
+                    // (or shouldn't) because the line and col data is already been assigned
+                    // to each token.
                     let code_start = elements[elements.len()-1].code_end();
                     let line_number = elements[elements.len()-1].line_number();
                     let code_end = code_start + 1;
@@ -283,13 +303,13 @@ impl<'a> Parser<'a> {
                     added_semicolon = true;
                 }
 
-
                 if token_pool.len() > 0 {
                     // if we ran out of space we should first see if we can
                     // add another character from the pool
                     let popd_token = token_pool.remove(0);
                     
                     if popd_token != Token::WhiteSpace {
+                        // we ignore whitespace. so if its a whitespace token we don't do anything.
                         elements.push(Element::codeelement_from_token(popd_token)); 
                     }
                     
@@ -305,15 +325,29 @@ impl<'a> Parser<'a> {
             }
 
             if let Some(element_token) = elements[cursor].i().get_token() {
-                // checks if we should be adding another nesting level
-                if let Some(ending) = element_token.i().matching_set() { nesting_stack.push(ending); }
-                // now checks if we ended a nest
-                else if nesting_stack.len() > 0 {
+
+                let first_part = if nesting_stack.len() > 0 {
+                    // first we should check if this token is something we are expecting, so we don't add extra
+                    // stuff to the stack that we can never remove.
                     if element_token == &nesting_stack[nesting_stack.len()-1] {
-                        // we remove that level
+                        // we remove that level, and don't check it (if we should be adding something).
+                        // we do this because of the `do` in `while .. do .. end`, we don't want to create
+                        // another nesting level (like in `do .. end`) because it will be looking for 2
+                        // `end` tokens but we only will have one.
                         nesting_stack.pop();
+                        true
+                    } else {
+                        false
                     }
+                } else { false };
+
+                if let Some(mut ending) = element_token.i().matching_set() { 
+                    // checks if we should be adding another nesting level, but
+                    // only do it if we didn't use this token to add someting new
+                    // to the stack
+                    if !first_part { nesting_stack.append(&mut ending) }; 
                 }
+
             }
 
             // we increment it
@@ -505,7 +539,7 @@ impl<'a> Parser<'a> {
 
         Ok(false)
     }
-
+    
     fn process_var_list(elements : &mut Vec<CodeElement>) -> Result<bool,Error> {
         //! [ ] {var `,´} var
 
@@ -670,6 +704,7 @@ impl<'a> Parser<'a> {
     fn process_args(elements : &mut Vec<CodeElement>) -> Result<bool, Error> {
         // `(´ [explist] `)´
 
+        // this one assumes we have an explist
         if elements.len() >= 3 { for i in 0 .. elements.len() - 2 { 
             if elements[i].i().matches_token(Token::LeftParen)
             && elements[i+1].i().is_exp_list()
@@ -688,11 +723,36 @@ impl<'a> Parser<'a> {
                 });
 
                 #[cfg(feature = "dev-testing")]
-                println!(".. processed args");
+                println!(".. processed args (1)");
 
                 return Ok(true);
             }
         }}
+
+        // this one is an empty call
+        if elements.len() >= 2 { for i in 0 .. elements.len() - 1 { 
+            if elements[i].i().matches_token(Token::LeftParen)
+            && elements[i+1].i().matches_token(Token::RightParen) {
+                let left = elements.remove(i);
+                let right = elements.remove(i);
+
+                let code_start : usize = left.code_start();
+                let line_number : usize = left.line_number();
+                let code_end : usize = right.code_end();
+
+                let item = Element::create(vec![left, right], vec![])?;
+                elements.insert(i, CodeRef {
+                    item, code_start, code_end, line_number
+                });
+
+                #[cfg(feature = "dev-testing")]
+                println!(".. processed args (0)");
+
+                return Ok(true);
+            }
+        }}
+
+
 
         Ok(false)
     }
@@ -1854,9 +1914,10 @@ mod tests {
     pub fn test_failure() {
         use crate::scanner::Scanner;
         use crate::parser::Parser;
-        
+
         let code : &str = r#"
         -- comment here
+        a.b.c.d:e()
         x = 1 + - 2
         x,y = 2,3
         tabletest = { a = 1; b = 2; c = 2+3, ["return"] = 4; }
@@ -1868,6 +1929,11 @@ mod tests {
         while bob >= 4 do
             -- this is the inside of the loop
             bob = bob + 3
+
+            do
+                -- this is nested
+                bob = bob + 3 - 4 * 3
+            end
         end
 
         for i,v in pairs(table) do

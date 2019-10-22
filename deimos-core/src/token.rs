@@ -137,16 +137,28 @@ impl Token {
         }
     }
 
-    pub fn matching_set(&self) -> Option<Token> {
+    pub fn matching_set(&self) -> Option<Vec<Token>> {
         //! returns the token(s) that are used when nesting, so if 
-        //! you did this on `{` it will return `}` 
+        //! you did this on `{` it will return `}` . 
+        //! 
+        //! if there is one more token to get, like 
+        //! while .. do .. end it will return the next two tokens 
+        //! in reverse order, so `end` and then `do`, but should 
+        //! only return the tokens if they are reused, like in the 
+        //! case of `while .. do .. end` and the `do .. end` becuase
+        //! that is a different kind of block.
+        //! 
+        //! thats why we don't care about the other tokens in an
+        //! `if .. then .. end` loop.
 
         match self {
-            Token::LeftMoustache => Some(Token::RightMoustache),
-            Token::Do => Some(Token::End),
-            Token::If => Some(Token::End),
-            Token::Repeat => Some(Token::Until),
-            Token::Function => Some(Token::End),
+            Token::LeftMoustache => Some(vec![Token::RightMoustache]),
+            Token::Do => Some(vec![Token::End]),
+            Token::While => Some(vec![Token::End, Token::Do]),
+            Token::If => Some(vec![Token::End]),
+            Token::Repeat => Some(vec![Token::Until]),
+            Token::Function => Some(vec![Token::End]),
+            Token::For => Some(vec![Token::End, Token::Do]),
             _ => None,
         }
     } 
