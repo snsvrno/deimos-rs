@@ -527,26 +527,6 @@ mod tests {
     use crate::scanner::Scanner;
 
     #[test]
-    #[ignore]
-    pub fn test_failure() {
-
-        let code : &str = r#"q,..."#;
-
-        let scanner = Scanner::from_str(code,Some("testfile.lua"));
-
-        match scanner {
-            Ok(scanner) => { 
-                for t in scanner.tokens.iter() {
-                    println!("{:?}",t);
-                }
-            },
-            Err(error) => { println!("{}",error); assert!(false); },
-        }
-
-        assert!(false)
-    }
-
-    #[test]
     pub fn scan_lua_test_suite() {
         use std::fs::File;
         use std::io::Read;
@@ -585,7 +565,7 @@ mod tests {
             let code_stream : Vec<u8> = { 
                 // loads the contents of the file
                 let mut contents : Vec<u8> = Vec::new();
-                let mut file = File::open(&format!("../lua/{}",file_name)).expect(&format!("{}: can't open file",file_name));
+                let mut file = File::open(&format!("../lua/lua-test-suite/{}",file_name)).expect(&format!("{}: can't open file",file_name));
                 file.read_to_end(&mut contents).expect(&format!("{}: can't read file",file_name));
 
                 contents
